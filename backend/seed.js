@@ -9,114 +9,133 @@ async function seed() {
         ['alumno', await bcrypt.hash('alumno123', salt), 'Pepe Alumno', 'alumno'],
         ['padre', await bcrypt.hash('padre123', salt), 'Carlos Padre', 'padre']
     ];
+    for (const [username, password, nombre, rol] of users) {
+        await db.query(
+            `INSERT INTO users (username, password, nombre, rol) VALUES ($1, $2, $3, $4)
+             ON CONFLICT (username) DO NOTHING`,
+            [username, password, nombre, rol]
+        );
+    }
+    console.log('Usuarios de prueba creados.');
 
-    db.serialize(() => {
-        const stmt = db.prepare(`INSERT OR IGNORE INTO users (username, password, nombre, rol) VALUES (?, ?, ?, ?)`);
-        users.forEach(user => {
-            stmt.run(user);
-        });
-        stmt.finalize();
-        console.log('Usuarios de prueba creados.');
+    // Niveles
+    const niveles = ['Inicial', 'Primario', 'Secundario'];
+    for (const nombre of niveles) {
+        await db.query('INSERT INTO niveles (nombre) VALUES ($1) ON CONFLICT (nombre) DO NOTHING', [nombre]);
+    }
 
-        // Niveles
-        const niveles = [['Inicial'], ['Primario'], ['Secundario']];
-        const stmtNiv = db.prepare(`INSERT OR IGNORE INTO niveles (nombre) VALUES (?)`);
-        niveles.forEach(n => stmtNiv.run(n));
-        stmtNiv.finalize();
+    // Aulas
+    const aulas = [['Aula 101', 30], ['Aula 102', 30], ['Laboratorio de Ciencias', 20]];
+    for (const [nombre, capacidad] of aulas) {
+        await db.query('INSERT INTO aulas (nombre, capacidad) VALUES ($1, $2) ON CONFLICT (nombre) DO NOTHING', [nombre, capacidad]);
+    }
 
-        // Aulas
-        const aulas = [['Aula 101', 30], ['Aula 102', 30], ['Laboratorio de Ciencias', 20]];
-        const stmtAul = db.prepare(`INSERT OR IGNORE INTO aulas (nombre, capacidad) VALUES (?, ?)`);
-        aulas.forEach(a => stmtAul.run(a));
-        stmtAul.finalize();
+    // Instalaciones agendables (pileta, gimnasio, laboratorios).
+    // Se siembran solo si la tabla está vacía para no duplicar en re-ejecuciones.
+    const instalCount = await db.query('SELECT COUNT(*) as count FROM instalaciones');
+    if (instalCount.rows[0].count === 0) {
+        const instalaciones = [
+            ['Pileta', 'Pileta climatizada para clases de natación'],
+            ['Gimnasio', 'Gimnasio cubierto para educación física y deportes'],
+            ['Laboratorio de Ciencias', 'Laboratorio equipado para física, química y biología'],
+            ['Laboratorio de Informática', 'Sala de computación con equipamiento actualizado']
+        ];
+        for (const [nombre, descripcion] of instalaciones) {
+            await db.query('INSERT INTO instalaciones (nombre, descripcion) VALUES ($1, $2)', [nombre, descripcion]);
+        }
+        console.log('Instalaciones iniciales creadas.');
+    }
 
-        // Instalaciones agendables (pileta, gimnasio, laboratorios).
-        // Se siembran solo si la tabla está vacía para no duplicar en re-ejecuciones.
-        db.get("SELECT COUNT(*) as count FROM instalaciones", (err, row) => {
-            if (!err && row && row.count === 0) {
-                const instalaciones = [
-                    ['Pileta', 'Pileta climatizada para clases de natación'],
-                    ['Gimnasio', 'Gimnasio cubierto para educación física y deportes'],
-                    ['Laboratorio de Ciencias', 'Laboratorio equipado para física, química y biología'],
-                    ['Laboratorio de Informática', 'Sala de computación con equipamiento actualizado']
-                ];
-                const stmtInst = db.prepare(`INSERT INTO instalaciones (nombre, descripcion) VALUES (?, ?)`);
-                instalaciones.forEach(i => stmtInst.run(i));
-                stmtInst.finalize();
-                console.log('Instalaciones iniciales creadas.');
-            }
-        });
+    // Datos de prueba (legajos, cursos, materias, cuotas, etc.).
+    // Solo se cargan si todavía no hay alumnos, para no duplicar al re-ejecutar.
+    const alumnosCount = await db.query('SELECT COUNT(*) as count FROM alumnos');
+    if (alumnosCount.rows[0].count === 0) {
+        await seedDatosPrueba();
+    }
 
-        // Datos de prueba (legajos, cursos, materias, cuotas, etc.).
-        // Solo se cargan si todavía no hay alumnos, para no duplicar al re-ejecutar.
-        db.get("SELECT COUNT(*) as count FROM alumnos", (err, row) => {
-            if (!err && row && row.count === 0) {
-                seedDatosPrueba();
-            }
-        });
-
-        console.log('Datos académicos iniciales creados.');
-    });
+    console.log('Datos académicos iniciales creados.');
 }
 
 // Carga un set chico de datos de ejemplo para poder probar el sistema de inmediato.
-function seedDatosPrueba() {
+async function seedDatosPrueba() {
     // Personal docente y no docente
     const personal = [
         ['María', 'González', '20111222', 'Docente', 'mgonzalez@educar.edu.ar'],
         ['Jorge', 'Pérez', '20333444', 'Docente', 'jperez@educar.edu.ar'],
         ['Laura', 'Méndez', '20555666', 'Administrativo', 'lmendez@educar.edu.ar']
     ];
-    const stmtP = db.prepare(`INSERT OR IGNORE INTO personal (nombre, apellido, dni, tipo, email) VALUES (?, ?, ?, ?, ?)`);
-    personal.forEach(p => stmtP.run(p));
-    stmtP.finalize();
+    for (const [nombre, apellido, dni, tipo, email] of personal) {
+        await db.query(
+            `INSERT INTO personal (nombre, apellido, dni, tipo, email) VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (dni) DO NOTHING`,
+            [nombre, apellido, dni, tipo, email]
+        );
+    }
 
-    db.all("SELECT id, nombre FROM niveles", (err, niveles) => {
-        if (err || !niveles) return;
-        const nivelId = (n) => (niveles.find(x => x.nombre === n) || {}).id;
+    const nivelesResult = await db.query('SELECT id, nombre FROM niveles');
+    const nivelId = (n) => (nivelesResult.rows.find(x => x.nombre === n) || {}).id;
 
-        const crearCurso = (nivel, division, cupo, materias, alumnos) => {
-            db.run("INSERT INTO cursos (nivel_id, division, cupo) VALUES (?, ?, ?)", [nivelId(nivel), division, cupo], function() {
-                const curso_id = this.lastID;
-                const stmtM = db.prepare(`INSERT INTO materias (nombre, curso_id) VALUES (?, ?)`);
-                materias.forEach(m => stmtM.run([m, curso_id]));
-                stmtM.finalize();
-                const stmtA = db.prepare(`INSERT OR IGNORE INTO alumnos (nombre, apellido, dni, fecha_nacimiento, curso_id) VALUES (?, ?, ?, ?, ?)`);
-                alumnos.forEach(a => stmtA.run([a[0], a[1], a[2], a[3], curso_id]));
-                stmtA.finalize();
-            });
-        };
+    const crearCurso = async (nivel, division, cupo, materias, alumnos) => {
+        const cursoResult = await db.query(
+            'INSERT INTO cursos (nivel_id, division, cupo) VALUES ($1, $2, $3) RETURNING id',
+            [nivelId(nivel), division, cupo]
+        );
+        const curso_id = cursoResult.rows[0].id;
 
-        crearCurso('Primario', 'A', 25, ['Matemática', 'Lengua', 'Ciencias Naturales'], [
-            ['Lucía', 'Fernández', '45111222', '2015-03-10'],
-            ['Mateo', 'Ramírez', '45333444', '2015-07-22']
-        ]);
-        crearCurso('Secundario', 'A', 30, ['Historia', 'Biología', 'Matemática'], [
-            ['Sofía', 'Torres', '44555666', '2010-01-15'],
-            ['Benjamín', 'Díaz', '44777888', '2010-09-05']
-        ]);
+        for (const m of materias) {
+            await db.query('INSERT INTO materias (nombre, curso_id) VALUES ($1, $2)', [m, curso_id]);
+        }
+        for (const a of alumnos) {
+            await db.query(
+                `INSERT INTO alumnos (nombre, apellido, dni, fecha_nacimiento, curso_id) VALUES ($1, $2, $3, $4, $5)
+                 ON CONFLICT (dni) DO NOTHING`,
+                [a[0], a[1], a[2], a[3], curso_id]
+            );
+        }
+    };
 
-        // Configuración de cuotas por nivel
-        const stmtC = db.prepare(`INSERT INTO cuotas_config (nivel_id, monto, mes, anio, vencimiento) VALUES (?, ?, ?, ?, ?)`);
-        stmtC.run([nivelId('Primario'), 15000, 3, 2026, '2026-03-10']);
-        stmtC.run([nivelId('Secundario'), 18000, 3, 2026, '2026-03-10']);
-        stmtC.finalize();
-    });
+    await crearCurso('Primario', 'A', 25, ['Matemática', 'Lengua', 'Ciencias Naturales'], [
+        ['Lucía', 'Fernández', '45111222', '2015-03-10'],
+        ['Mateo', 'Ramírez', '45333444', '2015-07-22']
+    ]);
+    await crearCurso('Secundario', 'A', 30, ['Historia', 'Biología', 'Matemática'], [
+        ['Sofía', 'Torres', '44555666', '2010-01-15'],
+        ['Benjamín', 'Díaz', '44777888', '2010-09-05']
+    ]);
+
+    // Configuración de cuotas por nivel
+    await db.query(
+        'INSERT INTO cuotas_config (nivel_id, monto, mes, anio, vencimiento) VALUES ($1, $2, $3, $4, $5)',
+        [nivelId('Primario'), 15000, 3, 2026, '2026-03-10']
+    );
+    await db.query(
+        'INSERT INTO cuotas_config (nivel_id, monto, mes, anio, vencimiento) VALUES ($1, $2, $3, $4, $5)',
+        [nivelId('Secundario'), 18000, 3, 2026, '2026-03-10']
+    );
 
     // Actividades extracurriculares
-    const stmtAct = db.prepare(`INSERT INTO actividades_extra (nombre, tipo, horario, cupo_max) VALUES (?, ?, ?, ?)`);
-    stmtAct.run(['Fútbol', 'Deporte', 'Lun y Mié 16hs', 20]);
-    stmtAct.run(['Inglés', 'Idioma', 'Mar y Jue 17hs', 15]);
-    stmtAct.run(['Teatro', 'Cultura', 'Vie 15hs', 12]);
-    stmtAct.finalize();
+    const actividades = [
+        ['Fútbol', 'Deporte', 'Lun y Mié 16hs', 20],
+        ['Inglés', 'Idioma', 'Mar y Jue 17hs', 15],
+        ['Teatro', 'Cultura', 'Vie 15hs', 12]
+    ];
+    for (const [nombre, tipo, horario, cupo_max] of actividades) {
+        await db.query(
+            'INSERT INTO actividades_extra (nombre, tipo, horario, cupo_max) VALUES ($1, $2, $3, $4)',
+            [nombre, tipo, horario, cupo_max]
+        );
+    }
 
     // Ruta de transporte
-    db.run("INSERT INTO transporte_rutas (nombre_ruta, chofer_nombre, capacidad_max) VALUES (?, ?, ?)", ['Ruta Centro', 'Carlos Suárez', 18]);
+    await db.query(
+        'INSERT INTO transporte_rutas (nombre_ruta, chofer_nombre, capacidad_max) VALUES ($1, $2, $3)',
+        ['Ruta Centro', 'Carlos Suárez', 18]
+    );
 
     // Preinscripción de ejemplo (pendiente)
-    db.run(
+    await db.query(
         `INSERT INTO preinscripciones (alumno_nombre, alumno_dni, alumno_edad, nivel, turno, tutor_nombre, tutor_telefono, tutor_email, observaciones)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         ['Valentina Ruiz', '46999000', 6, 'Primario', 'Mañana', 'Marcela Ruiz', '3624111222', 'mruiz@mail.com', 'Hermana de alumno actual']
     );
 
@@ -128,7 +147,10 @@ function seedDatosPrueba() {
 module.exports = seed;
 
 // Si se ejecuta directamente (`node seed.js`), sembrar.
-// Esperar a que la DB se inicialice (config/database.js lo hace al importar).
+// Pequeño delay para que database.js termine de crear las tablas (la
+// inicialización del esquema es asíncrona y no se espera al hacer el require).
 if (require.main === module) {
-    setTimeout(seed, 1000);
+    setTimeout(() => {
+        seed().catch((err) => console.error('Error al sembrar:', err.message));
+    }, 1000);
 }

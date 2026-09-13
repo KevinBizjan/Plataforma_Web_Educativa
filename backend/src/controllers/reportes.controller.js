@@ -1,35 +1,27 @@
 const db = require('../config/database');
 
-exports.getEstadisticasGenerales = (req, res) => {
-    const stats = {
-        total_alumnos: 0,
-        deuda_total: 0,
-        preinscripciones_pendientes: 0,
-        total_docentes: 0
-    };
+exports.getEstadisticasGenerales = async (req, res) => {
+    try {
+        const [alumnosRes, deudaRes, preinscRes, docentesRes] = await Promise.all([
+            db.query('SELECT COUNT(*) as count FROM alumnos'),
+            db.query('SELECT SUM(saldo_pendiente) as total FROM saldos_alumnos'),
+            db.query("SELECT COUNT(*) as count FROM preinscripciones WHERE estado = 'pendiente'"),
+            db.query("SELECT COUNT(*) as count FROM personal WHERE tipo = 'Docente'")
+        ]);
 
-    db.serialize(() => {
-        db.get("SELECT COUNT(*) as count FROM alumnos", (err, row) => {
-            if (!err && row) stats.total_alumnos = row.count;
+        res.json({
+            total_alumnos: alumnosRes.rows[0].count,
+            deuda_total: deudaRes.rows[0].total || 0,
+            preinscripciones_pendientes: preinscRes.rows[0].count,
+            total_docentes: docentesRes.rows[0].count
         });
-
-        db.get("SELECT SUM(saldo_pendiente) as total FROM saldos_alumnos", (err, row) => {
-            if (!err && row) stats.deuda_total = row.total || 0;
-        });
-
-        db.get("SELECT COUNT(*) as count FROM preinscripciones WHERE estado = 'pendiente'", (err, row) => {
-            if (!err && row) stats.preinscripciones_pendientes = row.count;
-        });
-
-        db.get("SELECT COUNT(*) as count FROM personal WHERE tipo = 'Docente'", (err, row) => {
-            if (!err && row) stats.total_docentes = row.count;
-            res.json(stats);
-        });
-    });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 };
 
 // Reporte académico: calificaciones por alumno y materia (para visualización/impresión).
-exports.getReporteAcademico = (req, res) => {
+exports.getReporteAcademico = async (req, res) => {
     const query = `
         SELECT a.apellido, a.nombre, a.dni,
                niveles.nombre AS nivel_nombre, cursos.division,
@@ -42,14 +34,16 @@ exports.getReporteAcademico = (req, res) => {
         LEFT JOIN niveles ON cursos.nivel_id = niveles.id
         ORDER BY a.apellido, a.nombre, materias.nombre, c.trimestre
     `;
-    db.all(query, [], (err, rows) => {
-        if (err) return res.status(500).json({ message: err.message });
-        res.json(rows);
-    });
+    try {
+        const result = await db.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 };
 
 // Reporte financiero: detalle de pagos registrados (para visualización/impresión).
-exports.getReporteFinanciero = (req, res) => {
+exports.getReporteFinanciero = async (req, res) => {
     const query = `
         SELECT p.fecha_pago, a.apellido, a.nombre, a.dni,
                p.monto_pagado, p.metodo_pago,
@@ -59,8 +53,10 @@ exports.getReporteFinanciero = (req, res) => {
         LEFT JOIN saldos_alumnos s ON s.alumno_id = a.id
         ORDER BY p.fecha_pago DESC
     `;
-    db.all(query, [], (err, rows) => {
-        if (err) return res.status(500).json({ message: err.message });
-        res.json(rows);
-    });
+    try {
+        const result = await db.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 };
