@@ -1,7 +1,9 @@
 const db = require('../config/database');
 const PDFDocument = require('pdfkit');
 
-const { NOMBRE_REGEX, esNombreValido, esDniValido } = require('../utils/validators');
+const { NOMBRE_REGEX, esNombreValido, esDniValido, esEmailValido } = require('../utils/validators');
+
+const ESTADOS_PERSONAL = ['Activo', 'Inactivo', 'Licencia'];
 
 // --- PERSONAL ---
 exports.getPersonal = async (req, res) => {
@@ -13,18 +15,34 @@ exports.getPersonal = async (req, res) => {
     }
 };
 
+// Valida los campos comunes a alta y baja de personal. Devuelve un mensaje
+// de error (string) o null si todo es válido.
+const validarPersonal = ({ nombre, apellido, dni, tipo, email, telefono, especialidad, estado }) => {
+    if (!nombre || !apellido || !dni || !tipo || !telefono) return "Nombre, apellido, DNI, tipo y teléfono son obligatorios";
+    if (!NOMBRE_REGEX.test(String(nombre).trim()) || !NOMBRE_REGEX.test(String(apellido).trim())) {
+        return "Nombre y apellido solo pueden contener letras (sin números ni símbolos)";
+    }
+    if (!/^\d+$/.test(String(dni).trim())) return "El DNI debe ser numérico (sin puntos ni letras)";
+    if (email && !esEmailValido(email)) return "El correo electrónico no tiene un formato válido";
+    if (tipo === 'Docente' && !String(especialidad || '').trim()) return "La especialidad es obligatoria para el personal docente";
+    if (estado && !ESTADOS_PERSONAL.includes(estado)) return "Estado de personal inválido";
+    return null;
+};
+
 exports.createPersonal = async (req, res) => {
     const { nombre, apellido, dni, tipo, email } = req.body;
-    if (!nombre || !apellido || !dni || !tipo) return res.status(400).json({ message: "Campos obligatorios" });
-    if (!NOMBRE_REGEX.test(String(nombre).trim()) || !NOMBRE_REGEX.test(String(apellido).trim())) {
-        return res.status(400).json({ message: "Nombre y apellido solo pueden contener letras (sin números ni símbolos)" });
-    }
-    if (!/^\d+$/.test(String(dni).trim())) return res.status(400).json({ message: "El DNI debe ser numérico (sin puntos ni letras)" });
+    const telefono = (req.body.telefono || '').trim();
+    const especialidad = (req.body.especialidad || '').trim();
+    const estado = (req.body.estado || 'Activo').trim();
+
+    const error = validarPersonal({ nombre, apellido, dni, tipo, email, telefono, especialidad, estado });
+    if (error) return res.status(400).json({ message: error });
 
     try {
         const result = await db.query(
-            'INSERT INTO personal (nombre, apellido, dni, tipo, email) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-            [nombre, apellido, dni, tipo, email]
+            `INSERT INTO personal (nombre, apellido, dni, tipo, email, especialidad, telefono, estado)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+            [nombre, apellido, dni, tipo, email, especialidad || null, telefono, estado]
         );
         res.status(201).json({ id: result.rows[0].id });
     } catch (err) {
@@ -36,16 +54,19 @@ exports.createPersonal = async (req, res) => {
 exports.updatePersonal = async (req, res) => {
     const { id } = req.params;
     const { nombre, apellido, dni, tipo, email } = req.body;
-    if (!nombre || !apellido || !dni || !tipo) return res.status(400).json({ message: "Campos obligatorios" });
-    if (!NOMBRE_REGEX.test(String(nombre).trim()) || !NOMBRE_REGEX.test(String(apellido).trim())) {
-        return res.status(400).json({ message: "Nombre y apellido solo pueden contener letras (sin números ni símbolos)" });
-    }
-    if (!/^\d+$/.test(String(dni).trim())) return res.status(400).json({ message: "El DNI debe ser numérico (sin puntos ni letras)" });
+    const telefono = (req.body.telefono || '').trim();
+    const especialidad = (req.body.especialidad || '').trim();
+    const estado = (req.body.estado || 'Activo').trim();
+
+    const error = validarPersonal({ nombre, apellido, dni, tipo, email, telefono, especialidad, estado });
+    if (error) return res.status(400).json({ message: error });
 
     try {
         const result = await db.query(
-            'UPDATE personal SET nombre = $1, apellido = $2, dni = $3, tipo = $4, email = $5 WHERE id = $6',
-            [nombre, apellido, dni, tipo, email, id]
+            `UPDATE personal SET nombre = $1, apellido = $2, dni = $3, tipo = $4, email = $5,
+                especialidad = $6, telefono = $7, estado = $8
+             WHERE id = $9`,
+            [nombre, apellido, dni, tipo, email, especialidad || null, telefono, estado, id]
         );
         if (result.rowCount === 0) return res.status(404).json({ message: "Personal no encontrado" });
         res.json({ message: "Legajo de personal actualizado correctamente" });

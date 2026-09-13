@@ -53,7 +53,11 @@ CREATE TABLE IF NOT EXISTS alumnos (
     dni TEXT UNIQUE NOT NULL,
     fecha_nacimiento DATE NOT NULL,
     curso_id INTEGER REFERENCES cursos(id),
-    tutor_id INTEGER REFERENCES users(id)
+    tutor_id INTEGER REFERENCES users(id),
+    domicilio TEXT,
+    telefono TEXT,
+    email TEXT,
+    estado TEXT DEFAULT 'Activo'
 );
 
 CREATE TABLE IF NOT EXISTS personal (
@@ -63,7 +67,10 @@ CREATE TABLE IF NOT EXISTS personal (
     dni TEXT UNIQUE NOT NULL,
     tipo TEXT CHECK (tipo IN ('Docente', 'Administrativo', 'Maestranza', 'Directivo')),
     email TEXT,
-    fecha_alta DATE DEFAULT CURRENT_DATE
+    fecha_alta DATE DEFAULT CURRENT_DATE,
+    especialidad TEXT,
+    telefono TEXT,
+    estado TEXT DEFAULT 'Activo'
 );
 
 CREATE TABLE IF NOT EXISTS materias (
@@ -225,3 +232,21 @@ CREATE TABLE IF NOT EXISTS actividad_calificaciones (
     nota INTEGER CHECK (nota >= 1 AND nota <= 10),
     fecha DATE DEFAULT CURRENT_DATE
 );
+
+-- --- Migración incremental: datos de contacto y estado de legajos ---
+-- Agregado después de la migración inicial a Postgres (Módulo Alumnos /
+-- Módulo Profesores). Usa ADD COLUMN/CONSTRAINT IF NOT EXISTS para que sea
+-- seguro de re-ejecutar tanto en una base nueva (creada con el CREATE TABLE
+-- de arriba) como en la base ya migrada de Supabase.
+ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS domicilio TEXT;
+ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS telefono TEXT;
+ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'Activo';
+ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS alumnos_estado_check;
+ALTER TABLE alumnos ADD CONSTRAINT alumnos_estado_check CHECK (estado IN ('Activo', 'Inactivo', 'Egresado'));
+
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS especialidad TEXT;
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS telefono TEXT;
+ALTER TABLE personal ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'Activo';
+ALTER TABLE personal DROP CONSTRAINT IF EXISTS personal_estado_check;
+ALTER TABLE personal ADD CONSTRAINT personal_estado_check CHECK (estado IN ('Activo', 'Inactivo', 'Licencia'));

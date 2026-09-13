@@ -1,6 +1,8 @@
 const db = require('../config/database');
 
-const { NOMBRE_REGEX, esNombreValido } = require('../utils/validators');
+const { NOMBRE_REGEX, esNombreValido, esEmailValido } = require('../utils/validators');
+
+const ESTADOS_ALUMNO = ['Activo', 'Inactivo', 'Egresado'];
 
 // --- NIVELES ---
 exports.getNiveles = async (req, res) => {
@@ -131,14 +133,25 @@ exports.getAlumnos = async (req, res) => {
 
 exports.createAlumno = async (req, res) => {
     const { nombre, apellido, dni, fecha_nacimiento, curso_id, tutor_id } = req.body;
-    if (!nombre || !apellido || !dni || !fecha_nacimiento) {
-        return res.status(400).json({ message: "Nombre, Apellido, DNI y Fecha de Nacimiento son obligatorios" });
+    const domicilio = (req.body.domicilio || '').trim();
+    const telefono = (req.body.telefono || '').trim();
+    const email = (req.body.email || '').trim();
+    const estado = (req.body.estado || 'Activo').trim();
+
+    if (!nombre || !apellido || !dni || !fecha_nacimiento || !domicilio || !telefono || !email) {
+        return res.status(400).json({ message: "Nombre, Apellido, DNI, Fecha de Nacimiento, Domicilio, Teléfono y Correo son obligatorios" });
     }
     if (!NOMBRE_REGEX.test(String(nombre).trim()) || !NOMBRE_REGEX.test(String(apellido).trim())) {
         return res.status(400).json({ message: "Nombre y apellido solo pueden contener letras (sin números ni símbolos)" });
     }
     if (!/^\d+$/.test(String(dni).trim())) {
         return res.status(400).json({ message: "El DNI debe ser numérico (sin puntos ni letras)" });
+    }
+    if (!esEmailValido(email)) {
+        return res.status(400).json({ message: "El correo electrónico no tiene un formato válido" });
+    }
+    if (!ESTADOS_ALUMNO.includes(estado)) {
+        return res.status(400).json({ message: "Estado de alumno inválido" });
     }
 
     try {
@@ -154,8 +167,9 @@ exports.createAlumno = async (req, res) => {
         }
 
         const result = await db.query(
-            'INSERT INTO alumnos (nombre, apellido, dni, fecha_nacimiento, curso_id, tutor_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-            [nombre, apellido, dni, fecha_nacimiento, curso_id || null, tutor_id || null]
+            `INSERT INTO alumnos (nombre, apellido, dni, fecha_nacimiento, curso_id, tutor_id, domicilio, telefono, email, estado)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+            [nombre, apellido, dni, fecha_nacimiento, curso_id || null, tutor_id || null, domicilio, telefono, email, estado]
         );
         res.status(201).json({ id: result.rows[0].id });
     } catch (err) {
@@ -166,9 +180,13 @@ exports.createAlumno = async (req, res) => {
 exports.updateAlumno = async (req, res) => {
     const { id } = req.params;
     const { nombre, apellido, dni, fecha_nacimiento, curso_id, tutor_id } = req.body;
+    const domicilio = (req.body.domicilio || '').trim();
+    const telefono = (req.body.telefono || '').trim();
+    const email = (req.body.email || '').trim();
+    const estado = (req.body.estado || 'Activo').trim();
 
-    if (!nombre || !apellido || !dni || !fecha_nacimiento) {
-        return res.status(400).json({ message: "Nombre, Apellido, DNI y Fecha de Nacimiento son obligatorios" });
+    if (!nombre || !apellido || !dni || !fecha_nacimiento || !domicilio || !telefono || !email) {
+        return res.status(400).json({ message: "Nombre, Apellido, DNI, Fecha de Nacimiento, Domicilio, Teléfono y Correo son obligatorios" });
     }
     if (!NOMBRE_REGEX.test(String(nombre).trim()) || !NOMBRE_REGEX.test(String(apellido).trim())) {
         return res.status(400).json({ message: "Nombre y apellido solo pueden contener letras (sin números ni símbolos)" });
@@ -176,14 +194,21 @@ exports.updateAlumno = async (req, res) => {
     if (!/^\d+$/.test(String(dni).trim())) {
         return res.status(400).json({ message: "El DNI debe ser numérico (sin puntos ni letras)" });
     }
+    if (!esEmailValido(email)) {
+        return res.status(400).json({ message: "El correo electrónico no tiene un formato válido" });
+    }
+    if (!ESTADOS_ALUMNO.includes(estado)) {
+        return res.status(400).json({ message: "Estado de alumno inválido" });
+    }
 
     const query = `
         UPDATE alumnos
-        SET nombre = $1, apellido = $2, dni = $3, fecha_nacimiento = $4, curso_id = $5, tutor_id = $6
-        WHERE id = $7
+        SET nombre = $1, apellido = $2, dni = $3, fecha_nacimiento = $4, curso_id = $5, tutor_id = $6,
+            domicilio = $7, telefono = $8, email = $9, estado = $10
+        WHERE id = $11
     `;
     try {
-        const result = await db.query(query, [nombre, apellido, dni, fecha_nacimiento, curso_id || null, tutor_id || null, id]);
+        const result = await db.query(query, [nombre, apellido, dni, fecha_nacimiento, curso_id || null, tutor_id || null, domicilio, telefono, email, estado, id]);
         if (result.rowCount === 0) return res.status(404).json({ message: "Alumno no encontrado" });
         res.json({ message: "Alumno actualizado correctamente" });
     } catch (err) {

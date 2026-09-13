@@ -450,7 +450,10 @@ const AdminDashboard = () => {
             apellido: form.apellido.value,
             dni: form.dni.value,
             tipo: form.tipo.value,
-            email: form.email.value
+            email: form.email.value,
+            telefono: form.telefono.value,
+            especialidad: form.especialidad.value,
+            estado: form.estado.value
         };
 
         try {
@@ -538,7 +541,11 @@ const AdminDashboard = () => {
             dni: form.dni.value,
             fecha_nacimiento: form.fecha_nacimiento.value,
             curso_id: form.curso_id?.value || null,
-            tutor_id: form.tutor_id?.value || null
+            tutor_id: form.tutor_id?.value || null,
+            domicilio: form.domicilio.value,
+            telefono: form.telefono.value,
+            email: form.email.value,
+            estado: form.estado.value
         };
 
         try {
@@ -948,11 +955,19 @@ const AdminDashboard = () => {
                             background: '#f8fafc', padding: '20px', borderRadius: '12px', marginBottom: '24px',
                             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px'
                         }}>
-                            <input type="text" placeholder="Nombre" required style={inputStyle} name="nombre" defaultValue={editingAlumno?.nombre || ''} />
-                            <input type="text" placeholder="Apellido" required style={inputStyle} name="apellido" defaultValue={editingAlumno?.apellido || ''} />
-                            <input type="text" placeholder="DNI" required style={inputStyle} name="dni" defaultValue={editingAlumno?.dni || ''} />
-                            <input type="date" required style={inputStyle} name="fecha_nacimiento" defaultValue={editingAlumno?.fecha_nacimiento || ''} />
-                            <select style={inputStyle} name="curso_id" defaultValue={editingAlumno?.curso_id || ''}>
+                            <input key={`al-nombre-${editingAlumno?.id || 'new'}`} type="text" placeholder="Nombre" required style={inputStyle} name="nombre" defaultValue={editingAlumno?.nombre || ''} />
+                            <input key={`al-apellido-${editingAlumno?.id || 'new'}`} type="text" placeholder="Apellido" required style={inputStyle} name="apellido" defaultValue={editingAlumno?.apellido || ''} />
+                            <input key={`al-dni-${editingAlumno?.id || 'new'}`} type="text" placeholder="DNI" required style={inputStyle} name="dni" defaultValue={editingAlumno?.dni || ''} />
+                            <input key={`al-fnac-${editingAlumno?.id || 'new'}`} type="date" required style={inputStyle} name="fecha_nacimiento" defaultValue={editingAlumno?.fecha_nacimiento || ''} />
+                            <input key={`al-domicilio-${editingAlumno?.id || 'new'}`} type="text" placeholder="Domicilio" required style={inputStyle} name="domicilio" defaultValue={editingAlumno?.domicilio || ''} />
+                            <input key={`al-telefono-${editingAlumno?.id || 'new'}`} type="text" placeholder="Teléfono" required style={inputStyle} name="telefono" defaultValue={editingAlumno?.telefono || ''} />
+                            <input key={`al-email-${editingAlumno?.id || 'new'}`} type="email" placeholder="Correo electrónico" required style={inputStyle} name="email" defaultValue={editingAlumno?.email || ''} />
+                            <select key={`al-estado-${editingAlumno?.id || 'new'}`} style={inputStyle} name="estado" defaultValue={editingAlumno?.estado || 'Activo'}>
+                                <option value="Activo">Activo</option>
+                                <option value="Inactivo">Inactivo</option>
+                                <option value="Egresado">Egresado</option>
+                            </select>
+                            <select key={`al-curso-${editingAlumno?.id || 'new'}`} style={inputStyle} name="curso_id" defaultValue={editingAlumno?.curso_id || ''}>
                                 <option value="">Asignar Curso (Opcional)</option>
                                 {cursos.map(c => (
                                     <option key={c.id} value={c.id}>{c.nivel_nombre} - {c.division}</option>
@@ -973,12 +988,13 @@ const AdminDashboard = () => {
                                         <th style={thStyle}>Nombre y Apellido</th>
                                         <th style={thStyle}>DNI</th>
                                         <th style={thStyle}>Curso</th>
+                                        <th style={thStyle}>Estado</th>
                                         <th style={thStyle}>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filteredAlumnos.length === 0 ? (
-                                        <tr><td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>No se encontraron alumnos.</td></tr>
+                                        <tr><td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>No se encontraron alumnos.</td></tr>
                                     ) : (
                                         filteredAlumnos.map((a) => (
                                             <tr key={a.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -986,6 +1002,7 @@ const AdminDashboard = () => {
                                                 <td style={tdStyle}><strong>{a.apellido}, {a.nombre}</strong></td>
                                                 <td style={tdStyle}>{a.dni}</td>
                                                 <td style={tdStyle}>{a.nivel_nombre || 'Sin asignar'} {a.division || ''}</td>
+                                                <td style={tdStyle}><span style={estadoBadgeStyle(a.estado)}>{a.estado || 'Activo'}</span></td>
                                                 <td style={tdStyle}>
                                                     <button 
                                                         onClick={() => {
@@ -1178,11 +1195,18 @@ const AdminDashboard = () => {
                             <input key={`apellido-${editingPersonal?.id || 'new'}`} type="text" name="apellido" placeholder="Apellido" required style={inputStyle} defaultValue={editingPersonal?.apellido || ''} />
                             <input key={`dni-${editingPersonal?.id || 'new'}`} type="text" name="dni" placeholder="DNI" required style={inputStyle} defaultValue={editingPersonal?.dni || ''} />
                             <input key={`email-${editingPersonal?.id || 'new'}`} type="email" name="email" placeholder="Email" required style={inputStyle} defaultValue={editingPersonal?.email || ''} />
+                            <input key={`telefono-${editingPersonal?.id || 'new'}`} type="text" name="telefono" placeholder="Teléfono" required style={inputStyle} defaultValue={editingPersonal?.telefono || ''} />
                             <select key={`tipo-${editingPersonal?.id || 'new'}`} name="tipo" required style={inputStyle} defaultValue={editingPersonal?.tipo || 'Docente'}>
                                 <option value="Docente">Docente</option>
                                 <option value="Administrativo">Administrativo</option>
                                 <option value="Maestranza">Maestranza</option>
                                 <option value="Directivo">Directivo</option>
+                            </select>
+                            <input key={`especialidad-${editingPersonal?.id || 'new'}`} type="text" name="especialidad" placeholder="Especialidad (solo Docentes)" style={inputStyle} defaultValue={editingPersonal?.especialidad || ''} />
+                            <select key={`estado-${editingPersonal?.id || 'new'}`} name="estado" style={inputStyle} defaultValue={editingPersonal?.estado || 'Activo'}>
+                                <option value="Activo">Activo</option>
+                                <option value="Inactivo">Inactivo</option>
+                                <option value="Licencia">Licencia</option>
                             </select>
                             <button type="submit" className="btn btn-violet">{editingPersonal ? 'Guardar Cambios' : 'Registrar Personal'}</button>
                         </form>
@@ -1197,12 +1221,13 @@ const AdminDashboard = () => {
                                         <th style={thStyle}>DNI</th>
                                         <th style={thStyle}>Tipo</th>
                                         <th style={thStyle}>Email</th>
+                                        <th style={thStyle}>Estado</th>
                                         <th style={thStyle}>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {personal.length === 0 ? (
-                                        <tr><td colSpan="6" style={{ textAlign: 'center', padding: '20px' }}>No hay personal registrado.</td></tr>
+                                        <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>No hay personal registrado.</td></tr>
                                     ) : (
                                         filteredPersonal.map((p) => (
                                             <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -1211,6 +1236,7 @@ const AdminDashboard = () => {
                                                 <td style={tdStyle}>{p.dni}</td>
                                                 <td style={tdStyle}><span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--blue)' }}>{p.tipo.toUpperCase()}</span></td>
                                                 <td style={tdStyle}>{p.email}</td>
+                                                <td style={tdStyle}><span style={estadoBadgeStyle(p.estado)}>{p.estado || 'Activo'}</span></td>
                                                 <td style={tdStyle}>
                                                     <button
                                                         onClick={() => { setEditingPersonal(p); setShowPersonalForm(true); }}
@@ -1805,6 +1831,15 @@ const inputStyle = {
 const cardStyle = { background: 'var(--white)', padding: '24px', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)' };
 const thStyle = { padding: '16px', fontSize: '0.85rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' };
 const tdStyle = { padding: '16px', fontSize: '0.9rem', verticalAlign: 'top' };
+
+// Colorea el badge de estado de un legajo (alumno o personal) según su valor.
+const ESTADO_COLORES = { Activo: '#166534', Inactivo: '#991b1b', Egresado: '#64748b', Licencia: '#92400e' };
+const estadoBadgeStyle = (estado) => ({
+    fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase',
+    color: ESTADO_COLORES[estado] || '#64748b',
+    background: (ESTADO_COLORES[estado] || '#64748b') + '1a',
+    padding: '3px 10px', borderRadius: '50px'
+});
 
 const getStatusColor = (status) => {
     switch (status) {
