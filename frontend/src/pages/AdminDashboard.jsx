@@ -33,6 +33,9 @@ const AdminDashboard = () => {
     const [academicoSub, setAcademicoSub] = useState('cursos');
     const [usuarios, setUsuarios] = useState([]);
     const [pagos, setPagos] = useState([]);
+    const [aviso, setAviso] = useState('');
+    const [avisoTitulo, setAvisoTitulo] = useState('');
+    const [avisoDestino, setAvisoDestino] = useState('all');
 
     useEffect(() => {
         if (activeTab === 'preinscripciones') fetchPreinscripciones();
@@ -90,6 +93,24 @@ const AdminDashboard = () => {
         const response = await apiFetch(`${API_URL}/api/auth/users/${id}`, { method: 'DELETE' });
         if (response.ok) fetchUsuarios();
         else { const errorData = await response.json().catch(() => ({})); alert(errorData.message || 'Error al eliminar el usuario'); }
+    };
+
+    const publicarAviso = async () => {
+        if (!avisoTitulo.trim() || !aviso.trim()) return alert('Completá el título y el mensaje del comunicado.');
+        const response = await apiFetch(`${API_URL}/api/comunicacion/notificaciones`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ titulo: avisoTitulo, mensaje: aviso, rol_destino: avisoDestino })
+        });
+        if (response.ok) {
+            alert('Comunicado publicado correctamente.');
+            setAvisoTitulo('');
+            setAviso('');
+            setAvisoDestino('all');
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            alert(errorData.message || 'Error al publicar el comunicado');
+        }
     };
 
     const fetchHorarios = async () => {
@@ -823,6 +844,13 @@ const AdminDashboard = () => {
                     style={{ fontSize: '0.8rem', color: activeTab === 'reportes' ? 'white' : 'var(--blue)' }}
                 >
                     📊 Reportes
+                </button>
+                <button
+                    onClick={() => setActiveTab('comunicados')}
+                    className={`btn ${activeTab === 'comunicados' ? 'btn-violet' : 'btn-hero-outline'}`}
+                    style={{ fontSize: '0.8rem', color: activeTab === 'comunicados' ? 'white' : 'var(--blue)' }}
+                >
+                    📣 Comunicados
                 </button>
             </div>
 
@@ -1711,6 +1739,50 @@ const AdminDashboard = () => {
                             )}
                         </tbody>
                     </table>
+                </div>
+            )}
+
+            {activeTab === 'comunicados' && (
+                <div style={{ background: 'var(--white)', padding: '24px', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)' }}>
+                    <h2 style={{ fontSize: '1.25rem', color: 'var(--blue)', fontWeight: 800, marginBottom: '8px' }}>Publicar Comunicado Institucional</h2>
+                    <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '20px' }}>El comunicado se muestra en el panel de los perfiles destinatarios seleccionados.</p>
+                    <div style={{ display: 'flex', gap: '16px', flexDirection: 'column', maxWidth: '640px' }}>
+                        <div>
+                            <label style={labelStyle}>Título</label>
+                            <input
+                                type="text"
+                                value={avisoTitulo}
+                                onChange={(e) => setAvisoTitulo(e.target.value)}
+                                placeholder="Título del comunicado"
+                                style={inputStyle}
+                            />
+                        </div>
+                        <div>
+                            <label style={labelStyle}>Mensaje</label>
+                            <textarea
+                                value={aviso}
+                                onChange={(e) => setAviso(e.target.value)}
+                                placeholder="Escribí el mensaje para la comunidad educativa..."
+                                style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', resize: 'none', height: '100px', fontFamily: 'inherit', outline: 'none' }}
+                            ></textarea>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Destinatario:</label>
+                                <select
+                                    value={avisoDestino}
+                                    onChange={(e) => setAvisoDestino(e.target.value)}
+                                    style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.85rem', fontWeight: 700 }}
+                                >
+                                    <option value="all">Todos los perfiles</option>
+                                    <option value="alumno">Solo Alumnos</option>
+                                    <option value="padre">Solo Padres/Tutores</option>
+                                    <option value="docente">Solo Docentes</option>
+                                </select>
+                            </div>
+                            <button onClick={publicarAviso} className="btn btn-violet" style={{ padding: '12px 28px' }}>Publicar Comunicado →</button>
+                        </div>
+                    </div>
                 </div>
             )}
         </DashboardLayout>

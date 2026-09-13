@@ -14,8 +14,20 @@ exports.getNotificaciones = async (req, res) => {
     }
 };
 
+const DESTINOS_VALIDOS = ['all', 'admin', 'docente', 'alumno', 'padre'];
+
 exports.crearNotificacion = async (req, res) => {
-    const { titulo, mensaje, rol_destino } = req.body;
+    const titulo = (req.body.titulo || '').trim();
+    const mensaje = (req.body.mensaje || '').trim();
+    const rol_destino = (req.body.rol_destino || '').trim();
+
+    if (!titulo || !mensaje || !rol_destino) {
+        return res.status(400).json({ message: 'El título, el mensaje y el destinatario son obligatorios' });
+    }
+    if (!DESTINOS_VALIDOS.includes(rol_destino)) {
+        return res.status(400).json({ message: 'Destinatario inválido' });
+    }
+
     try {
         const result = await db.query(
             'INSERT INTO notificaciones (titulo, mensaje, rol_destino) VALUES ($1, $2, $3) RETURNING id',
