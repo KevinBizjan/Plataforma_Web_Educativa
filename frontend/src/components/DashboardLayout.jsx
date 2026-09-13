@@ -10,12 +10,14 @@ const DashboardLayout = ({ title, children }) => {
     const [perfil, setPerfil] = useState(null);
     const [perfilLoading, setPerfilLoading] = useState(false);
     const [perfilError, setPerfilError] = useState('');
+    const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
-    const handleLogout = () => {
-        if (window.confirm('¿Estás seguro de que deseas cerrar la sesión?')) {
-            logout();
-            navigate('/');
-        }
+    const handleLogout = () => setLogoutConfirmOpen(true);
+
+    const confirmarLogout = () => {
+        setLogoutConfirmOpen(false);
+        logout();
+        navigate('/');
     };
 
     const abrirPerfil = async () => {
@@ -121,6 +123,20 @@ const DashboardLayout = ({ title, children }) => {
                                 )}
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de confirmación de cierre de sesión (RNF08) */}
+            {logoutConfirmOpen && (
+                <div style={modalOverlay} onClick={() => setLogoutConfirmOpen(false)}>
+                    <div style={{ ...modalContent, maxWidth: '380px' }} onClick={(e) => e.stopPropagation()}>
+                        <h2 style={{ fontSize: '1.15rem', color: 'var(--text)', fontWeight: 800, margin: '0 0 12px' }}>Cerrar sesión</h2>
+                        <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '0 0 24px' }}>¿Estás seguro de que deseas cerrar la sesión?</p>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                            <button onClick={() => setLogoutConfirmOpen(false)} className="btn btn-hero-outline" style={{ fontSize: '0.85rem', padding: '10px 18px' }}>Cancelar</button>
+                            <button onClick={confirmarLogout} className="btn" style={{ background: 'var(--orange)', color: 'white', fontSize: '0.85rem', padding: '10px 18px' }}>Sí, cerrar sesión</button>
+                        </div>
                     </div>
                 </div>
             )}
