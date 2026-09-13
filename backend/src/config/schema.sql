@@ -1,0 +1,227 @@
+-- Esquema PostgreSQL (Supabase) para Educar para Transformar.
+-- Traducido desde el esquema SQLite original (database.js).
+-- Se ejecuta una sola vez (o con CREATE TABLE IF NOT EXISTS, es re-ejecutable).
+
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    nombre TEXT NOT NULL,
+    rol TEXT NOT NULL CHECK (rol IN ('admin', 'docente', 'alumno', 'padre')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS preinscripciones (
+    id SERIAL PRIMARY KEY,
+    alumno_nombre TEXT NOT NULL,
+    alumno_dni TEXT,
+    alumno_edad INTEGER NOT NULL,
+    nivel TEXT NOT NULL,
+    turno TEXT NOT NULL,
+    tutor_nombre TEXT NOT NULL,
+    tutor_telefono TEXT NOT NULL,
+    tutor_email TEXT NOT NULL,
+    observaciones TEXT,
+    estado TEXT DEFAULT 'pendiente',
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- --- Núcleo académico ---
+
+CREATE TABLE IF NOT EXISTS niveles (
+    id SERIAL PRIMARY KEY,
+    nombre TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS aulas (
+    id SERIAL PRIMARY KEY,
+    nombre TEXT NOT NULL UNIQUE,
+    capacidad INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS cursos (
+    id SERIAL PRIMARY KEY,
+    nivel_id INTEGER REFERENCES niveles(id),
+    division TEXT NOT NULL,
+    cupo INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS alumnos (
+    id SERIAL PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    apellido TEXT NOT NULL,
+    dni TEXT UNIQUE NOT NULL,
+    fecha_nacimiento DATE NOT NULL,
+    curso_id INTEGER REFERENCES cursos(id),
+    tutor_id INTEGER REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS personal (
+    id SERIAL PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    apellido TEXT NOT NULL,
+    dni TEXT UNIQUE NOT NULL,
+    tipo TEXT CHECK (tipo IN ('Docente', 'Administrativo', 'Maestranza', 'Directivo')),
+    email TEXT,
+    fecha_alta DATE DEFAULT CURRENT_DATE
+);
+
+CREATE TABLE IF NOT EXISTS materias (
+    id SERIAL PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    curso_id INTEGER REFERENCES cursos(id)
+);
+
+-- NOTA (fix de integridad respecto al esquema SQLite original):
+-- docente_id referencia personal(id), NO una tabla "docentes" separada.
+-- El código de la app (academico.controller.js getDocentes/getHorarios) ya
+-- usa la tabla `personal` filtrada por tipo='Docente' como fuente de docentes;
+-- la vieja tabla `docentes` estaba definida en el esquema pero no la usa
+-- ningún controlador, así que se elimina para no dejar una FK que nunca
+-- coincide con los datos reales.
+CREATE TABLE IF NOT EXISTS horarios (
+    id SERIAL PRIMARY KEY,
+    materia_id INTEGER REFERENCES materias(id),
+    docente_id INTEGER REFERENCES personal(id),
+    aula_id INTEGER REFERENCES aulas(id),
+    dia_semana INTEGER,
+    hora_inicio TEXT,
+    hora_fin TEXT
+);
+
+CREATE TABLE IF NOT EXISTS asistencias (
+    id SERIAL PRIMARY KEY,
+    alumno_id INTEGER REFERENCES alumnos(id),
+    fecha DATE DEFAULT CURRENT_DATE,
+    estado TEXT CHECK (estado IN ('Presente', 'Ausente', 'Tarde'))
+);
+
+CREATE TABLE IF NOT EXISTS calificaciones (
+    id SERIAL PRIMARY KEY,
+    alumno_id INTEGER REFERENCES alumnos(id),
+    materia_id INTEGER REFERENCES materias(id),
+    nota INTEGER CHECK (nota >= 1 AND nota <= 10),
+    trimestre INTEGER
+);
+
+-- --- Gestión administrativa y financiera ---
+
+CREATE TABLE IF NOT EXISTS cuotas_config (
+    id SERIAL PRIMARY KEY,
+    nivel_id INTEGER REFERENCES niveles(id),
+    monto DECIMAL(10,2) NOT NULL,
+    mes INTEGER,
+    anio INTEGER,
+    vencimiento DATE
+);
+
+CREATE TABLE IF NOT EXISTS pagos (
+    id SERIAL PRIMARY KEY,
+    alumno_id INTEGER REFERENCES alumnos(id),
+    cuota_id INTEGER REFERENCES cuotas_config(id),
+    monto_pagado DECIMAL(10,2) NOT NULL,
+    fecha_pago TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    metodo_pago TEXT,
+    comprobante_url TEXT
+);
+
+CREATE TABLE IF NOT EXISTS saldos_alumnos (
+    alumno_id INTEGER PRIMARY KEY REFERENCES alumnos(id),
+    saldo_pendiente DECIMAL(10,2) DEFAULT 0,
+    ultima_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- --- Servicios institucionales ---
+
+CREATE TABLE IF NOT EXISTS comedor_asistencias (
+    id SERIAL PRIMARY KEY,
+    alumno_id INTEGER REFERENCES alumnos(id),
+    fecha DATE DEFAULT CURRENT_DATE,
+    consumio_menu BOOLEAN DEFAULT TRUE,
+    observaciones TEXT
+);
+
+CREATE TABLE IF NOT EXISTS transporte_rutas (
+    id SERIAL PRIMARY KEY,
+    nombre_ruta TEXT NOT NULL,
+    chofer_nombre TEXT,
+    capacidad_max INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS transporte_asignaciones (
+    id SERIAL PRIMARY KEY,
+    alumno_id INTEGER REFERENCES alumnos(id),
+    ruta_id INTEGER REFERENCES transporte_rutas(id),
+    punto_encuentro TEXT
+);
+
+CREATE TABLE IF NOT EXISTS instalaciones (
+    id SERIAL PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    descripcion TEXT
+);
+
+CREATE TABLE IF NOT EXISTS instalaciones_reservas (
+    id SERIAL PRIMARY KEY,
+    instalacion_id INTEGER REFERENCES instalaciones(id),
+    fecha DATE NOT NULL,
+    hora_inicio TIME NOT NULL,
+    hora_fin TIME NOT NULL,
+    reservado_por INTEGER REFERENCES users(id),
+    motivo TEXT
+);
+
+CREATE TABLE IF NOT EXISTS enfermeria_incidencias (
+    id SERIAL PRIMARY KEY,
+    alumno_id INTEGER REFERENCES alumnos(id),
+    descripcion TEXT NOT NULL CHECK (length(descripcion) >= 10),
+    accion_tomada TEXT,
+    notificado_padre BOOLEAN DEFAULT FALSE,
+    fecha_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- --- Extracurriculares, comunicación y reportes ---
+
+CREATE TABLE IF NOT EXISTS actividades_extra (
+    id SERIAL PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    tipo TEXT CHECK (tipo IN ('Deporte', 'Cultura', 'Idioma')),
+    horario TEXT,
+    cupo_max INTEGER
+);
+
+-- NOTA (fix de integridad): alumno_id referencia users(id), no alumnos(id).
+-- El alumno se autoinscribe con su propia cuenta (req.user.id en
+-- academico.controller.js inscribirActividad), no con el id de su legajo.
+-- Mismo criterio aplica a actividad_asistencias y actividad_calificaciones.
+CREATE TABLE IF NOT EXISTS inscripciones_extra (
+    id SERIAL PRIMARY KEY,
+    alumno_id INTEGER REFERENCES users(id),
+    actividad_id INTEGER REFERENCES actividades_extra(id),
+    fecha_inscripcion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS notificaciones (
+    id SERIAL PRIMARY KEY,
+    titulo TEXT NOT NULL,
+    mensaje TEXT NOT NULL,
+    rol_destino TEXT,
+    leido BOOLEAN DEFAULT FALSE,
+    fecha_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS actividad_asistencias (
+    id SERIAL PRIMARY KEY,
+    actividad_id INTEGER REFERENCES actividades_extra(id),
+    alumno_id INTEGER REFERENCES users(id),
+    fecha DATE DEFAULT CURRENT_DATE,
+    estado TEXT CHECK (estado IN ('Presente', 'Ausente', 'Tarde'))
+);
+
+CREATE TABLE IF NOT EXISTS actividad_calificaciones (
+    id SERIAL PRIMARY KEY,
+    actividad_id INTEGER REFERENCES actividades_extra(id),
+    alumno_id INTEGER REFERENCES users(id),
+    nota INTEGER CHECK (nota >= 1 AND nota <= 10),
+    fecha DATE DEFAULT CURRENT_DATE
+);
