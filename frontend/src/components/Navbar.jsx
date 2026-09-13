@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import ConfirmModal from './ConfirmModal';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('');
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
@@ -67,15 +69,19 @@ const Navbar = () => {
 
   const handleLogout = (e) => {
     if (e && e.preventDefault) e.preventDefault();
-    if (window.confirm('¿Estás seguro de que deseas cerrar la sesión?')) {
-      logout();
-      setIsOpen(false);
-      setPortalOpen(false);
-      navigate('/');
-    }
+    setIsOpen(false);
+    setPortalOpen(false);
+    setLogoutConfirmOpen(true);
+  };
+
+  const confirmarLogout = () => {
+    setLogoutConfirmOpen(false);
+    logout();
+    navigate('/');
   };
 
   return (
+    <>
     <header className="topbar">
       <div className="topbar-inner">
         {/* Logo */}
@@ -228,6 +234,18 @@ const Navbar = () => {
         )}
       </nav>
     </header>
+
+    {/* Modal de confirmación de cierre de sesión (RNF08) */}
+    {logoutConfirmOpen && (
+      <ConfirmModal
+        title="Cerrar sesión"
+        message="¿Estás seguro de que deseas cerrar la sesión?"
+        confirmLabel="Sí, cerrar sesión"
+        onCancel={() => setLogoutConfirmOpen(false)}
+        onConfirm={confirmarLogout}
+      />
+    )}
+    </>
   );
 };
 

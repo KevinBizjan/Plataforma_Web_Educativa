@@ -2,6 +2,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { API_URL } from '../config';
+import ConfirmModal from './ConfirmModal';
 
 const DashboardLayout = ({ title, children }) => {
     const { user, logout, apiFetch } = useAuth();
@@ -10,12 +11,14 @@ const DashboardLayout = ({ title, children }) => {
     const [perfil, setPerfil] = useState(null);
     const [perfilLoading, setPerfilLoading] = useState(false);
     const [perfilError, setPerfilError] = useState('');
+    const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
-    const handleLogout = () => {
-        if (window.confirm('¿Estás seguro de que deseas cerrar la sesión?')) {
-            logout();
-            navigate('/');
-        }
+    const handleLogout = () => setLogoutConfirmOpen(true);
+
+    const confirmarLogout = () => {
+        setLogoutConfirmOpen(false);
+        logout();
+        navigate('/');
     };
 
     const abrirPerfil = async () => {
@@ -123,6 +126,17 @@ const DashboardLayout = ({ title, children }) => {
                         )}
                     </div>
                 </div>
+            )}
+
+            {/* Modal de confirmación de cierre de sesión (RNF08) */}
+            {logoutConfirmOpen && (
+                <ConfirmModal
+                    title="Cerrar sesión"
+                    message="¿Estás seguro de que deseas cerrar la sesión?"
+                    confirmLabel="Sí, cerrar sesión"
+                    onCancel={() => setLogoutConfirmOpen(false)}
+                    onConfirm={confirmarLogout}
+                />
             )}
         </div>
     );
