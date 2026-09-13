@@ -60,15 +60,16 @@ async function seed() {
 async function seedDatosPrueba() {
     // Personal docente y no docente
     const personal = [
-        ['María', 'González', '20111222', 'Docente', 'mgonzalez@educar.edu.ar'],
-        ['Jorge', 'Pérez', '20333444', 'Docente', 'jperez@educar.edu.ar'],
-        ['Laura', 'Méndez', '20555666', 'Administrativo', 'lmendez@educar.edu.ar']
+        ['María', 'González', '20111222', 'Docente', 'mgonzalez@educar.edu.ar', 'Matemática', '3624555111'],
+        ['Jorge', 'Pérez', '20333444', 'Docente', 'jperez@educar.edu.ar', 'Lengua y Literatura', '3624555222'],
+        ['Laura', 'Méndez', '20555666', 'Administrativo', 'lmendez@educar.edu.ar', null, '3624555333']
     ];
-    for (const [nombre, apellido, dni, tipo, email] of personal) {
+    for (const [nombre, apellido, dni, tipo, email, especialidad, telefono] of personal) {
         await db.query(
-            `INSERT INTO personal (nombre, apellido, dni, tipo, email) VALUES ($1, $2, $3, $4, $5)
+            `INSERT INTO personal (nombre, apellido, dni, tipo, email, especialidad, telefono, estado)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'Activo')
              ON CONFLICT (dni) DO NOTHING`,
-            [nombre, apellido, dni, tipo, email]
+            [nombre, apellido, dni, tipo, email, especialidad, telefono]
         );
     }
 
@@ -86,21 +87,23 @@ async function seedDatosPrueba() {
             await db.query('INSERT INTO materias (nombre, curso_id) VALUES ($1, $2)', [m, curso_id]);
         }
         for (const a of alumnos) {
+            const [nombre, apellido, dni, fecha_nacimiento, domicilio, telefono, email] = a;
             await db.query(
-                `INSERT INTO alumnos (nombre, apellido, dni, fecha_nacimiento, curso_id) VALUES ($1, $2, $3, $4, $5)
+                `INSERT INTO alumnos (nombre, apellido, dni, fecha_nacimiento, curso_id, domicilio, telefono, email, estado)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Activo')
                  ON CONFLICT (dni) DO NOTHING`,
-                [a[0], a[1], a[2], a[3], curso_id]
+                [nombre, apellido, dni, fecha_nacimiento, curso_id, domicilio, telefono, email]
             );
         }
     };
 
     await crearCurso('Primario', 'A', 25, ['Matemática', 'Lengua', 'Ciencias Naturales'], [
-        ['Lucía', 'Fernández', '45111222', '2015-03-10'],
-        ['Mateo', 'Ramírez', '45333444', '2015-07-22']
+        ['Lucía', 'Fernández', '45111222', '2015-03-10', 'Av. 9 de Julio 123, Resistencia', '3624111222', 'lucia.fernandez@mail.com'],
+        ['Mateo', 'Ramírez', '45333444', '2015-07-22', 'Belgrano 456, Resistencia', '3624333444', 'mateo.ramirez@mail.com']
     ]);
     await crearCurso('Secundario', 'A', 30, ['Historia', 'Biología', 'Matemática'], [
-        ['Sofía', 'Torres', '44555666', '2010-01-15'],
-        ['Benjamín', 'Díaz', '44777888', '2010-09-05']
+        ['Sofía', 'Torres', '44555666', '2010-01-15', 'San Martín 789, Resistencia', '3624555666', 'sofia.torres@mail.com'],
+        ['Benjamín', 'Díaz', '44777888', '2010-09-05', 'Rivadavia 321, Resistencia', '3624777888', 'benjamin.diaz@mail.com']
     ]);
 
     // Configuración de cuotas por nivel
