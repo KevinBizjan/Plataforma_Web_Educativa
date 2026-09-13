@@ -1,6 +1,7 @@
 import { API_URL } from '../config';
 import { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
+import ConfirmModal from '../components/ConfirmModal';
 import { useAuth } from '../context/AuthContext';
 
 /**
@@ -41,6 +42,16 @@ const PadreDashboard = () => {
     const { apiFetch } = useAuth();
     const [showMenu, setShowMenu] = useState(false);
     const [showReporte, setShowReporte] = useState(false);
+    // Estado del modal de confirmación reutilizable (RNF08), reemplaza a
+    // window.confirm() para desvincular un hijo.
+    const [confirmState, setConfirmState] = useState(null);
+    const pedirConfirmacion = (message, onConfirm) => setConfirmState({ message, onConfirm });
+    const cerrarConfirmacion = () => setConfirmState(null);
+    const ejecutarConfirmacion = () => {
+        const { onConfirm } = confirmState;
+        cerrarConfirmacion();
+        onConfirm();
+    };
     const [notificaciones, setNotificaciones] = useState([]);
     const [hijosReales, setHijosReales] = useState([]);
     const [saldoTotal, setSaldoTotal] = useState(0);
@@ -142,22 +153,23 @@ const PadreDashboard = () => {
         }
     };
 
-    const desvincularHijo = async (id, nombreCompleto) => {
-        if (!window.confirm(`¿Desvincular a ${nombreCompleto} de tu cuenta?`)) return;
-        try {
-            const response = await apiFetch(`${API_URL}/api/academico/desvincular-hijo/${id}`, {
-                method: 'DELETE'
-            });
-            const data = await response.json();
-            if (response.ok) {
-                fetchHijosYSaldos();
-                fetchDisponibles();
-            } else {
-                alert(data.message || 'No se pudo desvincular el alumno.');
+    const desvincularHijo = (id, nombreCompleto) => {
+        pedirConfirmacion(`¿Desvincular a ${nombreCompleto} de tu cuenta?`, async () => {
+            try {
+                const response = await apiFetch(`${API_URL}/api/academico/desvincular-hijo/${id}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    fetchHijosYSaldos();
+                    fetchDisponibles();
+                } else {
+                    alert(data.message || 'No se pudo desvincular el alumno.');
+                }
+            } catch (error) {
+                console.error(error);
             }
-        } catch (error) {
-            console.error(error);
-        }
+        });
     };
 
     const [avisosLeidos, setAvisosLeidos] = useState([]);
@@ -192,6 +204,14 @@ const PadreDashboard = () => {
 
     return (
         <DashboardLayout title="Panel para Padres">
+            {confirmState && (
+                <ConfirmModal
+                    message={confirmState.message}
+                    onCancel={cerrarConfirmacion}
+                    onConfirm={ejecutarConfirmacion}
+                />
+            )}
+
             {/* Modal Menú Semanal */}
             {showMenu && (
                 <div style={modalOverlay}>

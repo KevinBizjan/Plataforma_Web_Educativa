@@ -2,11 +2,22 @@ import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import DashboardLayout from '../components/DashboardLayout';
+import ConfirmModal from '../components/ConfirmModal';
 
 import { NOMBRE_REGEX, esNombreValido } from '../utils/validators';
 
 const AdminDashboard = () => {
     const [activeTab, setActiveTab] = useState('preinscripciones');
+    // Estado del modal de confirmación reutilizable (RNF08), reemplaza a
+    // window.confirm() en todas las acciones destructivas de este panel.
+    const [confirmState, setConfirmState] = useState(null);
+    const pedirConfirmacion = (message, onConfirm, opts = {}) => setConfirmState({ message, onConfirm, ...opts });
+    const cerrarConfirmacion = () => setConfirmState(null);
+    const ejecutarConfirmacion = () => {
+        const { onConfirm } = confirmState;
+        cerrarConfirmacion();
+        onConfirm();
+    };
     const [preinscripciones, setPreinscripciones] = useState([]);
     const [alumnos, setAlumnos] = useState([]);
     const [cursos, setCursos] = useState([]);
@@ -88,11 +99,12 @@ const AdminDashboard = () => {
         else { const errorData = await response.json().catch(() => ({})); alert(errorData.message || 'Error al cambiar el rol'); }
     };
 
-    const deleteUsuario = async (id) => {
-        if (!window.confirm('¿Eliminar este usuario? Esta acción no se puede deshacer.')) return;
-        const response = await apiFetch(`${API_URL}/api/auth/users/${id}`, { method: 'DELETE' });
-        if (response.ok) fetchUsuarios();
-        else { const errorData = await response.json().catch(() => ({})); alert(errorData.message || 'Error al eliminar el usuario'); }
+    const deleteUsuario = (id) => {
+        pedirConfirmacion('¿Eliminar este usuario? Esta acción no se puede deshacer.', async () => {
+            const response = await apiFetch(`${API_URL}/api/auth/users/${id}`, { method: 'DELETE' });
+            if (response.ok) fetchUsuarios();
+            else { const errorData = await response.json().catch(() => ({})); alert(errorData.message || 'Error al eliminar el usuario'); }
+        });
     };
 
     const publicarAviso = async () => {
@@ -154,10 +166,11 @@ const AdminDashboard = () => {
         else { const errorData = await response.json().catch(() => ({})); alert(errorData.message || 'Error al crear el horario'); }
     };
 
-    const deleteHorario = async (id) => {
-        if (!window.confirm('¿Eliminar este horario?')) return;
-        const response = await apiFetch(`${API_URL}/api/academico/horarios/${id}`, { method: 'DELETE' });
-        if (response.ok) fetchHorarios();
+    const deleteHorario = (id) => {
+        pedirConfirmacion('¿Eliminar este horario?', async () => {
+            const response = await apiFetch(`${API_URL}/api/academico/horarios/${id}`, { method: 'DELETE' });
+            if (response.ok) fetchHorarios();
+        });
     };
 
     const fetchMaterias = async () => {
@@ -197,10 +210,11 @@ const AdminDashboard = () => {
         else { const errorData = await response.json().catch(() => ({})); alert(errorData.message || 'Error al guardar materia'); }
     };
 
-    const deleteMateria = async (id) => {
-        if (!window.confirm('¿Eliminar esta materia?')) return;
-        const response = await apiFetch(`${API_URL}/api/academico/materias/${id}`, { method: 'DELETE' });
-        if (response.ok) fetchMaterias();
+    const deleteMateria = (id) => {
+        pedirConfirmacion('¿Eliminar esta materia?', async () => {
+            const response = await apiFetch(`${API_URL}/api/academico/materias/${id}`, { method: 'DELETE' });
+            if (response.ok) fetchMaterias();
+        });
     };
 
     const handleActividadSubmit = async (e) => {
@@ -227,10 +241,11 @@ const AdminDashboard = () => {
         else { const errorData = await response.json().catch(() => ({})); alert(errorData.message || 'Error al guardar actividad'); }
     };
 
-    const deleteActividad = async (id) => {
-        if (!window.confirm('¿Eliminar esta actividad? Se borrarán también sus inscripciones.')) return;
-        const response = await apiFetch(`${API_URL}/api/academico/actividades/${id}`, { method: 'DELETE' });
-        if (response.ok) fetchActividades();
+    const deleteActividad = (id) => {
+        pedirConfirmacion('¿Eliminar esta actividad? Se borrarán también sus inscripciones.', async () => {
+            const response = await apiFetch(`${API_URL}/api/academico/actividades/${id}`, { method: 'DELETE' });
+            if (response.ok) fetchActividades();
+        });
     };
 
     const fetchReportesStats = async () => {
@@ -358,24 +373,26 @@ const AdminDashboard = () => {
         } catch (error) { console.error(error); }
     };
 
-    const deleteCurso = async (id) => {
-        if (!window.confirm('¿Eliminar curso?')) return;
-        try {
-            const response = await apiFetch(`${API_URL}/api/academico/cursos/${id}`, {
-                method: 'DELETE'
-            });
-            if (response.ok) fetchCursosYAulas();
-        } catch (error) { console.error(error); }
+    const deleteCurso = (id) => {
+        pedirConfirmacion('¿Eliminar curso?', async () => {
+            try {
+                const response = await apiFetch(`${API_URL}/api/academico/cursos/${id}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) fetchCursosYAulas();
+            } catch (error) { console.error(error); }
+        });
     };
 
-    const deleteAula = async (id) => {
-        if (!window.confirm('¿Eliminar aula?')) return;
-        try {
-            const response = await apiFetch(`${API_URL}/api/academico/aulas/${id}`, {
-                method: 'DELETE'
-            });
-            if (response.ok) fetchCursosYAulas();
-        } catch (error) { console.error(error); }
+    const deleteAula = (id) => {
+        pedirConfirmacion('¿Eliminar aula?', async () => {
+            try {
+                const response = await apiFetch(`${API_URL}/api/academico/aulas/${id}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) fetchCursosYAulas();
+            } catch (error) { console.error(error); }
+        });
     };
 
     const fetchNiveles = async () => {
@@ -404,11 +421,12 @@ const AdminDashboard = () => {
         else { const errorData = await response.json().catch(() => ({})); alert(errorData.message || 'Error al guardar el nivel'); }
     };
 
-    const deleteNivel = async (id) => {
-        if (!window.confirm('¿Eliminar este nivel educativo?')) return;
-        const response = await apiFetch(`${API_URL}/api/academico/niveles/${id}`, { method: 'DELETE' });
-        if (response.ok) fetchNiveles();
-        else { const errorData = await response.json().catch(() => ({})); alert(errorData.message || 'No se pudo eliminar el nivel'); }
+    const deleteNivel = (id) => {
+        pedirConfirmacion('¿Eliminar este nivel educativo?', async () => {
+            const response = await apiFetch(`${API_URL}/api/academico/niveles/${id}`, { method: 'DELETE' });
+            if (response.ok) fetchNiveles();
+            else { const errorData = await response.json().catch(() => ({})); alert(errorData.message || 'No se pudo eliminar el nivel'); }
+        });
     };
 
     const fetchPersonal = async () => {
@@ -427,16 +445,17 @@ const AdminDashboard = () => {
     const [searchTermAlumno, setSearchTermAlumno] = useState('');
     const [searchTermPersonal, setSearchTermPersonal] = useState('');
 
-    const deletePersonal = async (id) => {
-        if (!window.confirm('¿Está seguro de eliminar a este miembro del personal?')) return;
-        try {
-            const response = await apiFetch(`${API_URL}/api/financiero/personal/${id}`, {
-                method: 'DELETE'
-            });
-            if (response.ok) fetchPersonal();
-        } catch (error) {
-            console.error('Error:', error);
-        }
+    const deletePersonal = (id) => {
+        pedirConfirmacion('¿Está seguro de eliminar a este miembro del personal?', async () => {
+            try {
+                const response = await apiFetch(`${API_URL}/api/financiero/personal/${id}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) fetchPersonal();
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        });
     };
     const [showPersonalForm, setShowPersonalForm] = useState(false);
     const [showCursoForm, setShowCursoForm] = useState(false);
@@ -573,16 +592,17 @@ const AdminDashboard = () => {
         }
     };
 
-    const deleteAlumno = async (id) => {
-        if (!window.confirm('¿Está seguro de eliminar este legajo?')) return;
-        try {
-            const response = await apiFetch(`${API_URL}/api/academico/alumnos/${id}`, {
-                method: 'DELETE'
-            });
-            if (response.ok) fetchAlumnos();
-        } catch (error) {
-            console.error('Error:', error);
-        }
+    const deleteAlumno = (id) => {
+        pedirConfirmacion('¿Está seguro de eliminar este legajo?', async () => {
+            try {
+                const response = await apiFetch(`${API_URL}/api/academico/alumnos/${id}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) fetchAlumnos();
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        });
     };
 
     const fetchCursosYAulas = async () => {
@@ -725,8 +745,11 @@ const AdminDashboard = () => {
                 const data = await response.json().catch(() => ({}));
                 form.reset();
                 fetchPagos();
-                if (data.pago_id && window.confirm('Pago registrado correctamente.\n¿Descargar el comprobante en PDF?')) {
-                    descargarComprobante(data.pago_id);
+                if (data.pago_id) {
+                    pedirConfirmacion('¿Descargar el comprobante en PDF?', () => descargarComprobante(data.pago_id), {
+                        title: 'Pago registrado correctamente',
+                        confirmLabel: 'Descargar PDF'
+                    });
                 }
             }
             else { const errorData = await response.json().catch(() => ({})); alert(errorData.message || 'Error al registrar el pago'); }
@@ -772,24 +795,26 @@ const AdminDashboard = () => {
         else { const errorData = await response.json().catch(() => ({})); alert(errorData.message || 'Error al asignar el alumno a la ruta'); }
     };
 
-    const deleteRuta = async (id) => {
-        if (!window.confirm('¿Eliminar ruta?')) return;
-        try {
-            const response = await apiFetch(`${API_URL}/api/servicios/transporte/rutas/${id}`, {
-                method: 'DELETE'
-            });
-            if (response.ok) fetchServicios();
-        } catch (error) { console.error(error); }
+    const deleteRuta = (id) => {
+        pedirConfirmacion('¿Eliminar ruta?', async () => {
+            try {
+                const response = await apiFetch(`${API_URL}/api/servicios/transporte/rutas/${id}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) fetchServicios();
+            } catch (error) { console.error(error); }
+        });
     };
 
-    const deleteCuota = async (id) => {
-        if (!window.confirm('¿Eliminar esta configuración de cuota?')) return;
-        try {
-            const response = await apiFetch(`${API_URL}/api/financiero/cuotas-config/${id}`, {
-                method: 'DELETE'
-            });
-            if (response.ok) fetchFinanzas();
-        } catch (error) { console.error(error); }
+    const deleteCuota = (id) => {
+        pedirConfirmacion('¿Eliminar esta configuración de cuota?', async () => {
+            try {
+                const response = await apiFetch(`${API_URL}/api/financiero/cuotas-config/${id}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) fetchFinanzas();
+            } catch (error) { console.error(error); }
+        });
     };
 
     return (
@@ -1810,6 +1835,16 @@ const AdminDashboard = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {confirmState && (
+                <ConfirmModal
+                    title={confirmState.title}
+                    message={confirmState.message}
+                    confirmLabel={confirmState.confirmLabel}
+                    onCancel={cerrarConfirmacion}
+                    onConfirm={ejecutarConfirmacion}
+                />
             )}
         </DashboardLayout>
     );

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import ConfirmModal from './ConfirmModal';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -236,22 +237,13 @@ const Navbar = () => {
 
     {/* Modal de confirmación de cierre de sesión (RNF08) */}
     {logoutConfirmOpen && (
-      <div
-        style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 }}
-        onClick={() => setLogoutConfirmOpen(false)}
-      >
-        <div
-          style={{ background: 'white', padding: '32px', borderRadius: '16px', width: '90%', maxWidth: '380px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <h2 style={{ fontSize: '1.15rem', color: 'var(--text)', fontWeight: 800, margin: '0 0 12px' }}>Cerrar sesión</h2>
-          <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '0 0 24px' }}>¿Estás seguro de que deseas cerrar la sesión?</p>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <button onClick={() => setLogoutConfirmOpen(false)} className="btn btn-hero-outline" style={{ fontSize: '0.85rem', padding: '10px 18px' }}>Cancelar</button>
-            <button onClick={confirmarLogout} className="btn" style={{ background: 'var(--orange)', color: 'white', fontSize: '0.85rem', padding: '10px 18px' }}>Sí, cerrar sesión</button>
-          </div>
-        </div>
-      </div>
+      <ConfirmModal
+        title="Cerrar sesión"
+        message="¿Estás seguro de que deseas cerrar la sesión?"
+        confirmLabel="Sí, cerrar sesión"
+        onCancel={() => setLogoutConfirmOpen(false)}
+        onConfirm={confirmarLogout}
+      />
     )}
     </>
   );
