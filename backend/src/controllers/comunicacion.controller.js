@@ -1,34 +1,51 @@
 const db = require('../config/database');
 
 // --- NOTIFICACIONES ---
-exports.getNotificaciones = (req, res) => {
+exports.getNotificaciones = async (req, res) => {
     const { rol } = req.user;
-    db.all("SELECT * FROM notificaciones WHERE rol_destino = ? OR rol_destino = 'all' ORDER BY fecha_envio DESC", [rol], (err, rows) => {
-        if (err) return res.status(500).json({ message: err.message });
-        res.json(rows);
-    });
+    try {
+        const result = await db.query(
+            "SELECT * FROM notificaciones WHERE rol_destino = $1 OR rol_destino = 'all' ORDER BY fecha_envio DESC",
+            [rol]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 };
 
-exports.crearNotificacion = (req, res) => {
+exports.crearNotificacion = async (req, res) => {
     const { titulo, mensaje, rol_destino } = req.body;
-    db.run("INSERT INTO notificaciones (titulo, mensaje, rol_destino) VALUES (?, ?, ?)", [titulo, mensaje, rol_destino], function(err) {
-        if (err) return res.status(500).json({ message: err.message });
-        res.status(201).json({ id: this.lastID });
-    });
+    try {
+        const result = await db.query(
+            'INSERT INTO notificaciones (titulo, mensaje, rol_destino) VALUES ($1, $2, $3) RETURNING id',
+            [titulo, mensaje, rol_destino]
+        );
+        res.status(201).json({ id: result.rows[0].id });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 };
 
 // --- ACTIVIDADES EXTRA ---
-exports.getActividadesExtra = (req, res) => {
-    db.all("SELECT * FROM actividades_extra", [], (err, rows) => {
-        if (err) return res.status(500).json({ message: err.message });
-        res.json(rows);
-    });
+exports.getActividadesExtra = async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM actividades_extra');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 };
 
-exports.inscribirActividad = (req, res) => {
+exports.inscribirActividad = async (req, res) => {
     const { alumno_id, actividad_id } = req.body;
-    db.run("INSERT INTO inscripciones_extra (alumno_id, actividad_id) VALUES (?, ?)", [alumno_id, actividad_id], function(err) {
-        if (err) return res.status(500).json({ message: err.message });
-        res.status(201).json({ id: this.lastID });
-    });
+    try {
+        const result = await db.query(
+            'INSERT INTO inscripciones_extra (alumno_id, actividad_id) VALUES ($1, $2) RETURNING id',
+            [alumno_id, actividad_id]
+        );
+        res.status(201).json({ id: result.rows[0].id });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 };

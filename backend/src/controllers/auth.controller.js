@@ -5,6 +5,8 @@ require('dotenv').config();
 
 const { NOMBRE_REGEX, esNombreValido, esEmailValido, validarPassword } = require('../utils/validators');
 
+const ES_VIOLACION_UNIQUE = (err) => err.code === '23505';
+
 // Registro de cuenta familiar (rol "padre").
 // El usuario se registra con su correo y una contraseña. El correo se usa
 // como nombre de usuario para iniciar sesión. Luego, desde su panel, podrá
@@ -32,19 +34,21 @@ exports.registroFamiliar = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // El rol siempre es "padre": no se toma del cliente.
-    const query = `INSERT INTO users (username, password, nombre, rol) VALUES (?, ?, ?, 'padre')`;
-    db.run(query, [email, hashedPassword, nombre], function(err) {
-        if (err) {
-            if (err.message.includes('UNIQUE constraint failed')) {
-                return res.status(400).json({ message: 'Ya existe una cuenta con ese correo' });
-            }
-            return res.status(500).json({ message: 'Error al registrar usuario', error: err.message });
+    try {
+        const result = await db.query(
+            `INSERT INTO users (username, password, nombre, rol) VALUES ($1, $2, $3, 'padre') RETURNING id`,
+            [email, hashedPassword, nombre]
+        );
+        res.status(201).json({ message: 'Cuenta creada con éxito', userId: result.rows[0].id });
+    } catch (err) {
+        if (ES_VIOLACION_UNIQUE(err)) {
+            return res.status(400).json({ message: 'Ya existe una cuenta con ese correo' });
         }
-        res.status(201).json({ message: 'Cuenta creada con éxito', userId: this.lastID });
-    });
+        res.status(500).json({ message: 'Error al registrar usuario', error: err.message });
+    }
 };
 
-exports.login = (req, res) => {
+exports.login = async (req, res) => {
     const username = (req.body.username || '').trim().toLowerCase();
     const { password } = req.body;
 
@@ -52,11 +56,10 @@ exports.login = (req, res) => {
         return res.status(400).json({ message: 'Usuario y contraseña requeridos' });
     }
 
-    const query = `SELECT * FROM users WHERE username = ?`;
-    db.get(query, [username], async (err, user) => {
-        if (err) {
-            return res.status(500).json({ message: 'Error en el servidor', error: err.message });
-        }
+    try {
+        const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
+        const user = result.rows[0];
+
         if (!user) {
             return res.status(401).json({ message: 'Credenciales inválidas' });
         }
@@ -81,34 +84,42 @@ exports.login = (req, res) => {
                 rol: user.rol
             }
         });
-    });
+    } catch (err) {
+        res.status(500).json({ message: 'Error en el servidor', error: err.message });
+    }
 };
 
-exports.getMe = (req, res) => {
-    const query = `SELECT id, username, nombre, rol, created_at FROM users WHERE id = ?`;
-    db.get(query, [req.user.id], (err, user) => {
-        if (err) {
-            return res.status(500).json({ message: 'Error al obtener datos del usuario' });
-        }
-        res.json(user);
-    });
+exports.getMe = async (req, res) => {
+    try {
+        const result = await db.query(
+            'SELECT id, username, nombre, rol, created_at FROM users WHERE id = $1',
+            [req.user.id]
+        );
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ message: 'Error al obtener datos del usuario' });
+    }
 };
 
-exports.getPadres = (req, res) => {
-    db.all(`SELECT id, nombre, username FROM users WHERE rol = 'padre' ORDER BY nombre`, [], (err, rows) => {
-        if (err) return res.status(500).json({ message: err.message });
-        res.json(rows);
-    });
+exports.getPadres = async (req, res) => {
+    try {
+        const result = await db.query(`SELECT id, nombre, username FROM users WHERE rol = 'padre' ORDER BY nombre`);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 };
 
 // --- GESTIÓN DE USUARIOS Y ROLES (solo admin) ---
 const ROLES_VALIDOS = ['admin', 'docente', 'alumno', 'padre'];
 
-exports.getUsers = (req, res) => {
-    db.all(`SELECT id, username, nombre, rol, created_at FROM users ORDER BY rol, nombre`, [], (err, rows) => {
-        if (err) return res.status(500).json({ message: err.message });
-        res.json(rows);
-    });
+exports.getUsers = async (req, res) => {
+    try {
+        const result = await db.query('SELECT id, username, nombre, rol, created_at FROM users ORDER BY rol, nombre');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 };
 
 // Crea un usuario con el rol elegido por el administrador (lista desplegable en el front).
@@ -133,23 +144,22 @@ exports.createUser = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    db.run(
-        `INSERT INTO users (username, password, nombre, rol) VALUES (?, ?, ?, ?)`,
-        [username, hashedPassword, nombre, rol],
-        function(err) {
-            if (err) {
-                if (err.message.includes('UNIQUE constraint failed')) {
-                    return res.status(400).json({ message: 'Ya existe un usuario con ese nombre de usuario/correo' });
-                }
-                return res.status(500).json({ message: 'Error al crear usuario', error: err.message });
-            }
-            res.status(201).json({ message: 'Usuario creado con éxito', id: this.lastID });
+    try {
+        const result = await db.query(
+            `INSERT INTO users (username, password, nombre, rol) VALUES ($1, $2, $3, $4) RETURNING id`,
+            [username, hashedPassword, nombre, rol]
+        );
+        res.status(201).json({ message: 'Usuario creado con éxito', id: result.rows[0].id });
+    } catch (err) {
+        if (ES_VIOLACION_UNIQUE(err)) {
+            return res.status(400).json({ message: 'Ya existe un usuario con ese nombre de usuario/correo' });
         }
-    );
+        res.status(500).json({ message: 'Error al crear usuario', error: err.message });
+    }
 };
 
 // Cambia el rol de un usuario existente (restricción de accesos).
-exports.updateUserRol = (req, res) => {
+exports.updateUserRol = async (req, res) => {
     const { id } = req.params;
     const rol = (req.body.rol || '').trim();
     if (!ROLES_VALIDOS.includes(rol)) {
@@ -159,21 +169,25 @@ exports.updateUserRol = (req, res) => {
     if (parseInt(id) === req.user.id && rol !== 'admin') {
         return res.status(400).json({ message: 'No podés cambiar tu propio rol de administrador' });
     }
-    db.run(`UPDATE users SET rol = ? WHERE id = ?`, [rol, id], function(err) {
-        if (err) return res.status(500).json({ message: err.message });
-        if (this.changes === 0) return res.status(404).json({ message: 'Usuario no encontrado' });
+    try {
+        const result = await db.query('UPDATE users SET rol = $1 WHERE id = $2', [rol, id]);
+        if (result.rowCount === 0) return res.status(404).json({ message: 'Usuario no encontrado' });
         res.json({ message: 'Rol actualizado correctamente' });
-    });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 };
 
-exports.deleteUser = (req, res) => {
+exports.deleteUser = async (req, res) => {
     const { id } = req.params;
     if (parseInt(id) === req.user.id) {
         return res.status(400).json({ message: 'No podés eliminar tu propia cuenta' });
     }
-    db.run(`DELETE FROM users WHERE id = ?`, [id], function(err) {
-        if (err) return res.status(500).json({ message: err.message });
-        if (this.changes === 0) return res.status(404).json({ message: 'Usuario no encontrado' });
+    try {
+        const result = await db.query('DELETE FROM users WHERE id = $1', [id]);
+        if (result.rowCount === 0) return res.status(404).json({ message: 'Usuario no encontrado' });
         res.json({ message: 'Usuario eliminado correctamente' });
-    });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 };

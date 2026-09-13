@@ -18,20 +18,20 @@ ejecuta:
 ## 2. Variables de entorno
 En **Variables** del servicio agrega:
 - `JWT_SECRET` = un texto largo y aleatorio.
-- `DATABASE_PATH` = `/data/database.sqlite`  (ver punto 3, para persistir datos).
+- `DATABASE_URL` = la cadena de conexión de tu proyecto de Supabase (Project
+  Settings → Database → Connection string, modo "URI"), con la contraseña real.
 - `SEED_ON_BOOT` = `true`  (carga los datos demo; es idempotente, no duplica).
 - ⚠️ NO definas `PORT`: Railway lo inyecta automáticamente.
 
-## 3. Persistir los datos (IMPORTANTE) — Volume
-Sin esto, la base SQLite se reinicia en cada deploy.
-1. En el servicio: **Settings → Volumes → New Volume**.
-2. **Mount path** = `/data`.
-3. Con `DATABASE_PATH=/data/database.sqlite` (del punto 2), la base vive en el
-   volumen y **sobrevive a los deploys y reinicios**. ✅
+## 3. Persistencia de datos
+La base ahora vive en Supabase (PostgreSQL), no en el disco del servicio, así
+que **no hace falta ningún Volume**: los datos sobreviven a cada deploy/reinicio
+por sí solos mientras `DATABASE_URL` apunte al mismo proyecto de Supabase.
 
-> Con el Volume puesto, los datos que carguen los usuarios SÍ se conservan.
-> `SEED_ON_BOOT=true` solo asegura que los usuarios/datos demo existan; como usa
-> `INSERT OR IGNORE`, no pisa ni duplica lo que ya haya.
+El esquema (`backend/src/config/schema.sql`) se aplica solo al arrancar el
+servidor (usa `CREATE TABLE IF NOT EXISTS`, así que es seguro en cada deploy).
+`SEED_ON_BOOT=true` solo asegura que los usuarios/datos demo existan; como usa
+`ON CONFLICT ... DO NOTHING`, no pisa ni duplica lo que ya haya.
 
 ## 4. Redeploy
 Tras subir cambios a GitHub, Railway redeploya solo. Si no, usa **Deploy** manual.
