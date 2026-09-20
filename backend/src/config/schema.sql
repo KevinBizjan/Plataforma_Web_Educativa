@@ -100,7 +100,8 @@ CREATE TABLE IF NOT EXISTS asistencias (
     id SERIAL PRIMARY KEY,
     alumno_id INTEGER REFERENCES alumnos(id),
     fecha DATE DEFAULT CURRENT_DATE,
-    estado TEXT CHECK (estado IN ('Presente', 'Ausente', 'Tarde'))
+    estado TEXT CHECK (estado IN ('Presente', 'Ausente', 'Tarde')),
+    materia_id INTEGER REFERENCES materias(id)
 );
 
 CREATE TABLE IF NOT EXISTS calificaciones (
@@ -250,3 +251,48 @@ ALTER TABLE personal ADD COLUMN IF NOT EXISTS telefono TEXT;
 ALTER TABLE personal ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'Activo';
 ALTER TABLE personal DROP CONSTRAINT IF EXISTS personal_estado_check;
 ALTER TABLE personal ADD CONSTRAINT personal_estado_check CHECK (estado IN ('Activo', 'Inactivo', 'Licencia'));
+
+-- --- Asistencia por materia: un solo registro por alumno, día y materia (HU1) ---
+-- materia_id es opcional: NULL = asistencia general del día (sin materia).
+-- El índice trata NULL como una materia más (COALESCE) porque, de otro modo,
+-- Postgres permitiría duplicar los registros "generales". Se eliminan antes los
+-- duplicados exactos que pudieran existir (se conserva el más reciente).
+ALTER TABLE asistencias ADD COLUMN IF NOT EXISTS materia_id INTEGER REFERENCES materias(id);
+DROP INDEX IF EXISTS asistencias_alumno_fecha_uq;
+DELETE FROM asistencias a USING asistencias b
+    WHERE a.alumno_id = b.alumno_id AND a.fecha = b.fecha
+      AND COALESCE(a.materia_id, 0) = COALESCE(b.materia_id, 0) AND a.id < b.id;
+CREATE UNIQUE INDEX IF NOT EXISTS asistencias_alumno_fecha_materia_uq
+    ON asistencias (alumno_id, fecha, (COALESCE(materia_id, 0)));
+
+-- --- Seguridad: Row Level Security en todas las tablas ---
+-- Supabase expone automáticamente una API REST pública sobre el esquema
+-- `public`; sin RLS cualquiera con la clave pública podría leer/escribir las
+-- tablas (incluida `users`). Con RLS activado y SIN políticas, esa API queda
+-- bloqueada. El backend no se ve afectado: se conecta como el usuario
+-- `postgres` (dueño de las tablas), que no está sujeto a RLS.
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE preinscripciones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE niveles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aulas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cursos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alumnos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE personal ENABLE ROW LEVEL SECURITY;
+ALTER TABLE materias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE horarios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE asistencias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE calificaciones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cuotas_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pagos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE saldos_alumnos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE comedor_asistencias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transporte_rutas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transporte_asignaciones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE instalaciones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE instalaciones_reservas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE enfermeria_incidencias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE actividades_extra ENABLE ROW LEVEL SECURITY;
+ALTER TABLE inscripciones_extra ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notificaciones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE actividad_asistencias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE actividad_calificaciones ENABLE ROW LEVEL SECURITY;
