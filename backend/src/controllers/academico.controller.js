@@ -574,17 +574,97 @@ exports.deleteCurso = async (req, res) => {
 };
 
 // --- ASISTENCIA & CALIFICACIONES (Docente) ---
+const ESTADOS_ASISTENCIA = ['Presente', 'Ausente', 'Tarde'];
+
+const esFechaValida = (fecha) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) return false;
+    const d = new Date(`${fecha}T00:00:00Z`);
+    return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === fecha;
+};
+
+// Registra la asistencia de una lista de alumnos para una fecha y, opcionalmente,
+// una materia (HU1: "por curso/materia"; sin materia = asistencia general del día).
+// Es atómico (todo o nada) y no duplica un día ya cargado: si ya hay registros
+// responde 409, y solo los modifica si el docente lo confirma (sobrescribir).
 exports.registrarAsistencia = async (req, res) => {
-    const { alumno_id, fecha, estado } = req.body;
-    if (!alumno_id || !estado) return res.status(400).json({ message: "Datos incompletos" });
+    const { fecha, registros } = req.body;
+    const sobrescribir = req.body.sobrescribir === true;
+    const materiaId = req.body.materia_id ? Number(req.body.materia_id) : null;
+
+    if (materiaId !== null && (!Number.isInteger(materiaId) || materiaId <= 0)) {
+        return res.status(400).json({ message: "La materia es inválida" });
+    }
+
+    if (!Array.isArray(registros) || registros.length === 0) {
+        return res.status(400).json({ message: "Debe indicar al menos un alumno" });
+    }
+    if (!esFechaValida(fecha)) {
+        return res.status(400).json({ message: "La fecha es inválida (formato AAAA-MM-DD)" });
+    }
+    // Tolerancia de un día por la diferencia de zona horaria entre cliente y servidor.
+    const limite = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    if (fecha > limite) {
+        return res.status(400).json({ message: "No se puede registrar asistencia de una fecha futura" });
+    }
+
+    const ids = registros.map(r => Number(r.alumno_id));
+    const estados = registros.map(r => r.estado);
+    if (ids.some(id => !Number.isInteger(id) || id <= 0) || estados.some(e => !ESTADOS_ASISTENCIA.includes(e))) {
+        return res.status(400).json({ message: "Cada registro necesita un alumno válido y un estado (Presente, Ausente o Tarde)" });
+    }
+    if (new Set(ids).size !== ids.length) {
+        return res.status(400).json({ message: "Hay alumnos repetidos en la lista" });
+    }
+
+    const yaCargada = materiaId ? "Ya hay asistencia cargada para esta fecha y materia" : "Ya hay asistencia general cargada para esta fecha";
+
+    const client = await db.getClient();
     try {
-        const result = await db.query(
-            'INSERT INTO asistencias (alumno_id, fecha, estado) VALUES ($1, $2, $3) RETURNING id',
-            [alumno_id, fecha, estado]
+        await client.query('BEGIN');
+
+        if (materiaId) {
+            const materia = await client.query('SELECT curso_id FROM materias WHERE id = $1', [materiaId]);
+            if (materia.rowCount === 0) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ message: "La materia no existe" });
+            }
+            const delCurso = await client.query(
+                'SELECT COUNT(*)::int AS n FROM alumnos WHERE id = ANY($1::int[]) AND curso_id = $2',
+                [ids, materia.rows[0].curso_id]
+            );
+            if (delCurso.rows[0].n !== ids.length) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ message: "Hay alumnos que no pertenecen al curso de la materia elegida" });
+            }
+        }
+
+        const existentes = await client.query(
+            `SELECT alumno_id FROM asistencias
+             WHERE fecha = $1 AND alumno_id = ANY($2::int[]) AND COALESCE(materia_id, 0) = COALESCE($3::int, 0)`,
+            [fecha, ids, materiaId]
         );
-        res.status(201).json({ id: result.rows[0].id });
+        if (existentes.rowCount > 0 && !sobrescribir) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ message: yaCargada, existentes: existentes.rowCount });
+        }
+        const onConflict = sobrescribir
+            ? 'ON CONFLICT (alumno_id, fecha, (COALESCE(materia_id, 0))) DO UPDATE SET estado = EXCLUDED.estado'
+            : '';
+        await client.query(
+            `INSERT INTO asistencias (alumno_id, fecha, materia_id, estado)
+             SELECT t.alumno_id, $1::date, $4::int, t.estado FROM unnest($2::int[], $3::text[]) AS t(alumno_id, estado)
+             ${onConflict}`,
+            [fecha, ids, estados, materiaId]
+        );
+        await client.query('COMMIT');
+        res.status(201).json({ message: "Asistencia guardada", guardados: ids.length, modificados: existentes.rowCount });
     } catch (err) {
+        await client.query('ROLLBACK');
+        if (err.code === '23503') return res.status(400).json({ message: "Alguno de los alumnos o la materia no existe" });
+        if (err.code === '23505') return res.status(409).json({ message: yaCargada });
         res.status(500).json({ message: err.message });
+    } finally {
+        client.release();
     }
 };
 
@@ -670,7 +750,14 @@ exports.getHistorialAlumnoDocente = async (req, res) => {
                  ORDER BY materias.nombre, c.trimestre`,
                 [alumno_id]
             ),
-            db.query('SELECT * FROM asistencias WHERE alumno_id = $1 ORDER BY fecha DESC LIMIT 30', [alumno_id])
+            db.query(
+                `SELECT a.*, m.nombre AS materia_nombre
+                 FROM asistencias a
+                 LEFT JOIN materias m ON a.materia_id = m.id
+                 WHERE a.alumno_id = $1
+                 ORDER BY a.fecha DESC, a.id DESC LIMIT 30`,
+                [alumno_id]
+            )
         ]);
         historial.calificaciones = califResult.rows;
         historial.asistencias = asistResult.rows;

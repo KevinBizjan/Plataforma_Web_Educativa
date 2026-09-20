@@ -3,9 +3,16 @@ import { useState, useEffect } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import Toast from '../components/Toast';
+import ConfirmModal from '../components/ConfirmModal';
+
+// Fecha de hoy en hora local (AAAA-MM-DD). toISOString() usa UTC y de noche
+// devolvería el día siguiente.
+const fechaLocalHoy = () => new Date().toLocaleDateString('en-CA');
 
 const DocenteDashboard = () => {
     const { apiFetch } = useAuth();
+    // Modal de confirmación reutilizable (ej. modificar una asistencia ya cargada).
+    const [confirmState, setConfirmState] = useState(null);
     const [alumnos, setAlumnos] = useState([]);
     const [materias, setMaterias] = useState([]);
     const [materiaSel, setMateriaSel] = useState('');
@@ -194,26 +201,45 @@ const DocenteDashboard = () => {
         return '#fef2f2'; // Rojo
     };
 
-    const saveAsistencia = async () => {
-        if (alumnos.length === 0) return showToast('No hay alumnos para registrar.', 'warning');
+    // Alumnos que se muestran en la tabla de asistencia: los del curso de la
+    // materia elegida, o todos si no hay materia. Es la misma lista que se guarda.
+    const alumnosDeAsistencia = () => {
+        const matObj = materias.find(m => String(m.id) === String(asistenciaMateriaSel));
+        return matObj && matObj.curso_id ? alumnos.filter(a => a.curso_id === matObj.curso_id) : alumnos;
+    };
+
+    // Guarda la asistencia del día. Si ya estaba cargada, el servidor responde 409
+    // y se le pregunta al docente si quiere modificarla (sobrescribir = true).
+    const guardarAsistencia = async (sobrescribir = false) => {
+        const lista = alumnosDeAsistencia();
+        if (lista.length === 0) return showToast('No hay alumnos para registrar.', 'warning');
         try {
-            const results = await Promise.all(alumnos.map(a =>
-                apiFetch(`${API_URL}/api/academico/asistencias`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        alumno_id: a.id,
-                        fecha: new Date().toISOString().split('T')[0],
-                        estado: a.asistencia
-                    })
-                }).then(r => r.ok).catch(() => false)
-            ));
-            const fallidos = results.filter(ok => !ok).length;
-            if (fallidos === 0) showToast('Asistencia del día guardada correctamente', 'success');
-            else showToast(`Asistencia guardada parcialmente: ${fallidos} registro(s) fallaron.`, 'warning');
+            const response = await apiFetch(`${API_URL}/api/academico/asistencias`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fecha: fechaLocalHoy(),
+                    materia_id: asistenciaMateriaSel || null,
+                    sobrescribir,
+                    registros: lista.map(a => ({ alumno_id: a.id, estado: a.asistencia }))
+                })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) {
+                showToast(sobrescribir ? 'Asistencia del día modificada correctamente' : 'Asistencia del día guardada correctamente', 'success');
+            } else if (response.status === 409) {
+                setConfirmState({
+                    title: 'Asistencia ya cargada',
+                    message: `${data.message} (${data.existentes ?? 'algunos'} de ${lista.length} alumnos). ¿Querés modificarla con los estados que ves ahora?`,
+                    confirmLabel: 'Sí, modificar',
+                    onConfirm: () => guardarAsistencia(true)
+                });
+            } else {
+                showToast(data.message || 'Error al guardar la asistencia', 'error');
+            }
         } catch (error) {
             console.error(error);
-            showToast('Error al guardar la asistencia', 'error');
+            showToast('Error de conexión al guardar la asistencia', 'error');
         }
     };
 
@@ -371,7 +397,7 @@ const DocenteDashboard = () => {
                             onChange={(e) => setAsistenciaMateriaSel(e.target.value)}
                             style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.85rem' }}
                         >
-                            <option value="">Todas las materias / General</option>
+                            <option value="">General (sin materia)</option>
                             {materias.map(m => (
                                 <option key={m.id} value={m.id}>
                                     {m.nombre} ({m.nivel_nombre || 'Nivel'} - Div. {m.division || 'A'})
@@ -391,8 +417,7 @@ const DocenteDashboard = () => {
                             </thead>
                             <tbody>
                                 {(() => {
-                                    const matObj = materias.find(m => String(m.id) === String(asistenciaMateriaSel));
-                                    const lista = matObj && matObj.curso_id ? alumnos.filter(a => a.curso_id === matObj.curso_id) : alumnos;
+                                    const lista = alumnosDeAsistencia();
                                     return lista.map((a) => (
                                         <tr key={a.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                             <td style={{ padding: '12px 0', fontWeight: 700, fontSize: '0.9rem' }}>{a.nombre} {a.apellido}</td>
@@ -420,7 +445,7 @@ const DocenteDashboard = () => {
                                 })()}
                             </tbody>
                         </table>
-                        <button onClick={saveAsistencia} className="btn btn-green" style={{ width: '100%', marginTop: '20px', fontSize: '0.85rem' }}>Guardar Asistencia del Día</button>
+                        <button onClick={() => guardarAsistencia(false)} className="btn btn-green" style={{ width: '100%', marginTop: '20px', fontSize: '0.85rem' }}>Guardar Asistencia del Día</button>
                     </div>
                 </div>
 
@@ -778,6 +803,7 @@ const DocenteDashboard = () => {
                                 <thead>
                                     <tr style={{ textAlign: 'left', fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', borderBottom: '1px solid #e2e8f0' }}>
                                         <th style={{ padding: '6px 0' }}>Fecha</th>
+                                        <th>Materia</th>
                                         <th>Estado</th>
                                     </tr>
                                 </thead>
@@ -785,6 +811,7 @@ const DocenteDashboard = () => {
                                     {historialData.asistencias.map((ast, idx) => (
                                         <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                             <td style={{ padding: '8px 0', fontSize: '0.85rem' }}>{ast.fecha}</td>
+                                            <td style={{ fontSize: '0.85rem', color: '#475569' }}>{ast.materia_nombre || 'General'}</td>
                                             <td>
                                                 <span style={{
                                                     fontSize: '0.75rem', fontWeight: 800, padding: '2px 8px', borderRadius: '50px',
@@ -808,6 +835,20 @@ const DocenteDashboard = () => {
                 type={toast.type}
                 onClose={() => setToast({ message: '', type: 'success' })}
             />
+
+            {confirmState && (
+                <ConfirmModal
+                    title={confirmState.title}
+                    message={confirmState.message}
+                    confirmLabel={confirmState.confirmLabel}
+                    onCancel={() => setConfirmState(null)}
+                    onConfirm={() => {
+                        const { onConfirm } = confirmState;
+                        setConfirmState(null);
+                        onConfirm();
+                    }}
+                />
+            )}
         </DashboardLayout>
     );
 };
